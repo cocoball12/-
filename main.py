@@ -3,10 +3,13 @@ from discord.ext import commands, tasks
 import asyncio
 import os
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
-# .env 파일 로드
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # Render에서는 dotenv가 필요없음
+    pass
 
 # 봇 설정
 intents = discord.Intents.default()
