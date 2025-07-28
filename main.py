@@ -3,6 +3,8 @@ from discord.ext import commands, tasks
 import asyncio
 import os
 from datetime import datetime, timedelta
+from threading import Thread
+from flask import Flask
 
 try:
     from dotenv import load_dotenv
@@ -10,6 +12,21 @@ try:
 except ImportError:
     # Render에서는 dotenv가 필요없음
     pass
+
+# Flask 앱 생성 (웹서비스로 유지하기 위해)
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Discord Bot is running!"
+
+@app.route('/health')
+def health():
+    return "OK"
+
+def run_flask():
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
 # 봇 설정
 intents = discord.Intents.default()
@@ -170,11 +187,17 @@ class FinalButtonView(discord.ui.View):
         )
         await interaction.response.send_message(embed=embed)
 
-# 봇 실행
+# 봇 및 Flask 서버 실행
 if __name__ == "__main__":
     # 환경변수에서 토큰 가져오기 (보안을 위해)
     TOKEN = os.getenv('DISCORD_BOT_TOKEN')
     if not TOKEN:
         print("DISCORD_BOT_TOKEN 환경변수를 설정해주세요!")
     else:
+        # Flask 서버를 별도 스레드에서 실행
+        flask_thread = Thread(target=run_flask)
+        flask_thread.daemon = True
+        flask_thread.start()
+        
+        # 디스코드 봇 실행
         bot.run(TOKEN)
