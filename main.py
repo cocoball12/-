@@ -47,67 +47,86 @@ async def on_ready():
 async def on_member_join(member):
     guild = member.guild
     
-    # 스튜어디스 역할 찾기 (없으면 생성)
-    stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
-    if not stewardess_role:
-        stewardess_role = await guild.create_role(name="스튜어디스", color=discord.Color.blue())
-    
-    # 프라이빗 룸 카테고리 찾기 (없으면 생성)
-    category = discord.utils.get(guild.categories, name="프라이빗 룸")
-    if not category:
-        category = await guild.create_category("프라이빗 룸")
-    
-    # 권한 설정
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-        stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
-    }
-    
-    # 채널 생성
-    channel_name = f"괄자-애정듬뿍-{member.name}"
-    private_channel = await guild.create_text_channel(
-        channel_name,
-        category=category,
-        overwrites=overwrites
-    )
-    
-    # 첫 번째 안내문
-    embed1 = discord.Embed(
-        title="# 프라이빗룸",
-        description=f"**{member.mention} 고객님의 좌석 등급이 퍼스트로 올라 프라이빗 룸이 생성됐어요**\n"
-                   f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n"
-                   f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
-                   f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
-                   f"-# 좌석 등급 하향은 서버 추방입니다",
-        color=discord.Color.gold()
-    )
-    
-    await private_channel.send(embed=embed1)
-    
-    # 10초 후 두 번째 안내문과 버튼
-    await asyncio.sleep(10)
-    
-    embed2 = discord.Embed(
-        title="# 즐거운 식사시간~!",
-        description="**## 서버는 입맞에 맞으신가요?**\n"
-                   "서버가 입맛에 맞으시다면 한식 버튼을\n"
-                   "서버가 입맛에 맞지 않으시다면 승무원 버튼을 눌러주세요\n"
-                   "-# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!",
-        color=discord.Color.green()
-    )
-    
-    view = MealButtonView(member, stewardess_role, private_channel)
-    await private_channel.send(embed=embed2, view=view)
+    try:
+        # 스튜어디스 역할 찾기 (없으면 생성)
+        stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
+        if not stewardess_role:
+            stewardess_role = await guild.create_role(name="스튜어디스", color=discord.Color.blue())
+        
+        # 프라이빗 룸 카테고리 찾기 (없으면 생성)
+        category = discord.utils.get(guild.categories, name="프라이빗 룸")
+        if not category:
+            category = await guild.create_category("프라이빗 룸")
+        
+        # 권한 설정
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+            stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        }
+        
+        # 채널 생성 (채널명에서 특수문자 제거)
+        clean_name = "".join(c for c in member.name if c.isalnum() or c in ("-", "_"))
+        channel_name = f"괄자-애정듬뿍-{clean_name}"[:100]  # 디스코드 채널명 길이 제한
+        
+        private_channel = await guild.create_text_channel(
+            channel_name,
+            category=category,
+            overwrites=overwrites
+        )
+        
+        # 첫 번째 안내문
+        embed1 = discord.Embed(
+            title="# 프라이빗룸",
+            description=f"**{member.mention} 고객님의 좌석 등급이 퍼스트로 올라 프라이빗 룸이 생성됐어요**\n"
+                       f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n"
+                       f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
+                       f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
+                       f"-# 좌석 등급 하향은 서버 추방입니다",
+            color=discord.Color.gold()
+        )
+        
+        await private_channel.send(embed=embed1)
+        
+        # 10초 후 두 번째 안내문과 버튼
+        await asyncio.sleep(10)
+        
+        embed2 = discord.Embed(
+            title="# 즐거운 식사시간~!",
+            description="**## 서버는 입맞에 맞으신가요?**\n"
+                       "서버가 입맛에 맞으시다면 한식 버튼을\n"
+                       "서버가 입맛에 맞지 않으시다면 승무원 버튼을 눌러주세요\n"
+                       "-# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!",
+            color=discord.Color.green()
+        )
+        
+        view = MealButtonView(member, stewardess_role, private_channel)
+        await private_channel.send(embed=embed2, view=view)
+        
+    except Exception as e:
+        print(f"새 멤버 처리 중 오류 발생: {e}")
 
 class MealButtonView(discord.ui.View):
     def __init__(self, member, stewardess_role, channel):
-        super().__init__(timeout=None)
+        super().__init__(timeout=300)  # 5분 타임아웃
         self.member = member
         self.stewardess_role = stewardess_role
         self.channel = channel
 
-    @discord.ui.button(label='한식', style=discord.ButtonStyle.primary)
+    async def on_timeout(self):
+        # 타임아웃 시 버튼 비활성화
+        for item in self.children:
+            item.disabled = True
+        try:
+            # 마지막 메시지를 찾아서 수정
+            async for message in self.channel.history(limit=10):
+                if message.author == self.channel.guild.me and message.embeds:
+                    await message.edit(view=self)
+                    break
+        except:
+            pass
+
+    @discord.ui.button(label='한식', style=discord.ButtonStyle.primary, emoji='🍚')
     async def korean_food(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.member:
             await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
@@ -123,6 +142,11 @@ class MealButtonView(discord.ui.View):
         
         await interaction.response.send_message(embed=embed)
         
+        # 버튼 비활성화
+        for item in self.children:
+            item.disabled = True
+        await interaction.edit_original_response(view=self)
+        
         # 15초 후 최종 버튼 보내기
         await asyncio.sleep(15)
         final_view = FinalButtonView(self.member, self.channel)
@@ -134,7 +158,7 @@ class MealButtonView(discord.ui.View):
         )
         await self.channel.send(embed=final_embed, view=final_view)
 
-    @discord.ui.button(label='승무원', style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label='승무원', style=discord.ButtonStyle.secondary, emoji='✈️')
     async def stewardess(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.member:
             await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
@@ -146,6 +170,11 @@ class MealButtonView(discord.ui.View):
         )
         
         await interaction.response.send_message(embed=embed)
+        
+        # 버튼 비활성화
+        for item in self.children:
+            item.disabled = True
+        await interaction.edit_original_response(view=self)
         
         # 15초 후 최종 버튼 보내기
         await asyncio.sleep(15)
@@ -160,11 +189,11 @@ class MealButtonView(discord.ui.View):
 
 class FinalButtonView(discord.ui.View):
     def __init__(self, member, channel):
-        super().__init__(timeout=None)
+        super().__init__(timeout=None)  # 영구적으로 유지
         self.member = member
         self.channel = channel
 
-    @discord.ui.button(label='삭제', style=discord.ButtonStyle.danger)
+    @discord.ui.button(label='삭제', style=discord.ButtonStyle.danger, emoji='🗑️')
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.member:
             await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
@@ -172,9 +201,14 @@ class FinalButtonView(discord.ui.View):
         
         await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다!")
         await asyncio.sleep(3)
-        await self.channel.delete()
+        try:
+            await self.channel.delete()
+        except discord.NotFound:
+            pass  # 채널이 이미 삭제된 경우
+        except Exception as e:
+            print(f"채널 삭제 중 오류: {e}")
 
-    @discord.ui.button(label='유지', style=discord.ButtonStyle.success)
+    @discord.ui.button(label='유지', style=discord.ButtonStyle.success, emoji='💚')
     async def keep_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         if interaction.user != self.member:
             await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
@@ -186,18 +220,61 @@ class FinalButtonView(discord.ui.View):
             color=discord.Color.green()
         )
         await interaction.response.send_message(embed=embed)
+        
+        # 버튼 비활성화
+        for item in self.children:
+            item.disabled = True
+        await interaction.edit_original_response(view=self)
+
+# 디버깅을 위한 명령어들
+@bot.command(name='test')
+async def test_command(ctx):
+    """테스트 명령어 - 봇이 작동하는지 확인"""
+    await ctx.send("봇이 정상적으로 작동중입니다! ✅")
+
+@bot.command(name='simulate_join')
+async def simulate_join(ctx, member: discord.Member = None):
+    """새 멤버 참가 시뮬레이션 (테스트용)"""
+    if not member:
+        member = ctx.author
+    
+    await on_member_join(member)
+    await ctx.send(f"{member.mention}의 참가를 시뮬레이션했습니다.")
+
+# 에러 핸들링
+@bot.event
+async def on_error(event, *args, **kwargs):
+    print(f'에러 발생 - 이벤트: {event}, 인수: {args}')
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return  # 존재하지 않는 명령어는 무시
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("필수 인수가 누락되었습니다.")
+    else:
+        print(f'명령어 에러: {error}')
+        await ctx.send("명령어 처리 중 오류가 발생했습니다.")
 
 # 봇 및 Flask 서버 실행
 if __name__ == "__main__":
-    # 환경변수에서 토큰 가져오기 (보안을 위해)
+    # 환경변수에서 토큰 가져오기
     TOKEN = os.getenv('DISCORD_BOT_TOKEN')
     if not TOKEN:
-        print("DISCORD_BOT_TOKEN 환경변수를 설정해주세요!")
+        print("❌ DISCORD_BOT_TOKEN 환경변수를 설정해주세요!")
+        exit(1)
     else:
+        print("🚀 봇을 시작합니다...")
+        
         # Flask 서버를 별도 스레드에서 실행
-        flask_thread = Thread(target=run_flask)
-        flask_thread.daemon = True
+        flask_thread = Thread(target=run_flask, daemon=True)
         flask_thread.start()
+        print("🌐 Flask 서버가 시작되었습니다.")
         
         # 디스코드 봇 실행
-        bot.run(TOKEN)
+        try:
+            bot.run(TOKEN)
+        except discord.LoginFailure:
+            print("❌ 잘못된 봇 토큰입니다!")
+        except Exception as e:
+            print(f"❌ 봇 실행 중 오류 발생: {e}")
