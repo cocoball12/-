@@ -354,16 +354,26 @@ class MealButtonView(discord.ui.View):
 
     async def send_final_message(self):
         try:
-            final_view = FinalButtonView(self.member, self.channel)
             final_embed = discord.Embed(
                 title="# 목적지에 도착하셨습니다!",
                 description="서버에 적응을 하셨다면 **삭제** 버튼을\n\n"
                            "-# 서버적응에 가이드가 필요하시다면 **유지** 버튼을 눌러주세요! 가이드는 무료입니다!",
                 color=discord.Color.purple()
             )
-            await self.channel.send(embed=final_embed, view=final_view)
+            
+            # 각 메시지마다 새로운 뷰 인스턴스 생성
+            final_view = FinalButtonView(self.member, self.channel)
+            message = await self.channel.send(embed=final_embed, view=final_view)
+            
+            # 메시지 ID를 뷰에 저장하여 나중에 수정할 수 있도록 함
+            final_view.message = message
+            
+            print(f"최종 메시지 전송 완료: {message.id}")
+            
         except Exception as e:
             print(f"최종 메시지 전송 중 오류: {e}")
+            import traceback
+            traceback.print_exc()
 
 class FinalButtonView(discord.ui.View):
     def __init__(self, member, channel):
@@ -371,6 +381,7 @@ class FinalButtonView(discord.ui.View):
         self.member = member
         self.channel = channel
         self.used = False  # 버튼이 사용되었는지 확인
+        self.message = None  # 메시지 객체를 저장할 변수
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user != self.member:
@@ -383,36 +394,63 @@ class FinalButtonView(discord.ui.View):
 
     @discord.ui.button(label='삭제', style=discord.ButtonStyle.danger, emoji='🗑️')
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.used = True  # 버튼 사용됨 표시
-        await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
-        
-        await asyncio.sleep(3)
-        
         try:
+            self.used = True  # 버튼 사용됨 표시
+            
+            # 버튼 비활성화
+            for item in self.children:
+                item.disabled = True
+            
+            # 응답 전송
+            await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
+            
+            # 원본 메시지의 버튼 비활성화
+            if self.message:
+                try:
+                    await self.message.edit(view=self)
+                except Exception as e:
+                    print(f"메시지 수정 중 오류: {e}")
+            
+            await asyncio.sleep(3)
+            
+            # 채널 삭제
             await self.channel.delete(reason=f"{self.member.name}님이 프라이빗 룸 삭제를 요청했습니다.")
+            
         except discord.NotFound:
             pass  # 채널이 이미 삭제된 경우
         except Exception as e:
             print(f"채널 삭제 중 오류: {e}")
+            import traceback
+            traceback.print_exc()
 
     @discord.ui.button(label='유지', style=discord.ButtonStyle.success, emoji='💚')
     async def keep_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.used = True  # 버튼 사용됨 표시
-        embed = discord.Embed(
-            title="🎉 가이드 서비스",
-            description="프라이빗 룸이 유지됩니다!\n언제든지 스튜어디스에게 문의하세요! 😊",
-            color=discord.Color.green()
-        )
-        await interaction.response.send_message(embed=embed)
-        
-        # 버튼 비활성화
-        for item in self.children:
-            item.disabled = True
-        
         try:
-            await interaction.edit_original_response(view=self)
-        except:
-            pass
+            self.used = True  # 버튼 사용됨 표시
+            
+            embed = discord.Embed(
+                title="🎉 가이드 서비스",
+                description="프라이빗 룸이 유지됩니다!\n언제든지 스튜어디스에게 문의하세요! 😊",
+                color=discord.Color.green()
+            )
+            
+            # 버튼 비활성화
+            for item in self.children:
+                item.disabled = True
+            
+            await interaction.response.send_message(embed=embed)
+            
+            # 원본 메시지의 버튼 비활성화
+            if self.message:
+                try:
+                    await self.message.edit(view=self)
+                except Exception as e:
+                    print(f"메시지 수정 중 오류: {e}")
+                    
+        except Exception as e:
+            print(f"유지 버튼 처리 중 오류: {e}")
+            import traceback
+            traceback.print_exc()
 
 # 슬래시 커맨드들
 @bot.tree.command(name="테스트", description="봇이 정상 작동하는지 확인합니다")
@@ -463,6 +501,47 @@ async def cleanup_duplicate_channels(interaction: discord.Interaction):
                     print(f"채널 삭제 실패: {channel.name}, 오류: {e}")
     
     await interaction.followup.send(f"✅ {deleted_count}개의 중복 채널을 정리했습니다.", ephemeral=True)
+
+# 버튼 재활성화 명령어 추가
+@bot.tree.command(name="버튼재활성화", description="비활성화된 최종 버튼을 재활성화합니다")
+async def reactivate_buttons(interaction: discord.Interaction):
+    channel = interaction.channel
+    member = interaction.user
+    
+    # 채널 이름이 프라이빗 룸인지 확인
+    if not channel.name.startswith("괄자애정듬뿍"):
+        await interaction.response.send_message("이 명령어는 프라이빗 룸에서만 사용할 수 있습니다.", ephemeral=True)
+        return
+    
+    # 채널에 해당 멤버 권한이 있는지 확인
+    if member not in channel.overwrites:
+        await interaction.response.send_message("이 채널에 대한 권한이 없습니다.", ephemeral=True)
+        return
+    
+    # 마지막 봇 메시지 찾기
+    target_message = None
+    async for message in channel.history(limit=20):
+        if (message.author == bot.user and 
+            message.embeds and 
+            len(message.embeds) > 0 and 
+            "목적지에 도착하셨습니다" in message.embeds[0].title):
+            target_message = message
+            break
+    
+    if not target_message:
+        await interaction.response.send_message("최종 버튼 메시지를 찾을 수 없습니다.", ephemeral=True)
+        return
+    
+    # 새로운 버튼 뷰 생성 및 메시지 수정
+    new_view = FinalButtonView(member, channel)
+    new_view.message = target_message
+    
+    try:
+        await target_message.edit(view=new_view)
+        await interaction.response.send_message("✅ 버튼이 재활성화되었습니다!", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ 버튼 재활성화 중 오류가 발생했습니다: {e}", ephemeral=True)
+        print(f"버튼 재활성화 오류: {e}")
 
 # 기존 명령어들 (호환성을 위해)
 @bot.command(name='test')
