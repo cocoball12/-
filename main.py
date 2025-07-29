@@ -36,6 +36,9 @@ intents.members = True
 
 bot = commands.Bot(command_prefix='!', intents=intents)
 
+# 처리 중인 멤버를 추적하는 집합 (중복 방지용)
+processing_members = set()
+
 # 봇이 준비되었을 때
 @bot.event
 async def on_ready():
@@ -53,9 +56,40 @@ async def on_ready():
 @bot.event
 async def on_member_join(member):
     guild = member.guild
+    member_key = f"{guild.id}_{member.id}"
+    
+    # 이미 처리 중인 멤버인지 확인
+    if member_key in processing_members:
+        print(f"이미 처리 중인 멤버입니다: {member.name}")
+        return
+    
+    # 처리 중 목록에 추가
+    processing_members.add(member_key)
     
     try:
         print(f"새 멤버 참가: {member.name} (ID: {member.id})")
+        
+        # 이미 해당 멤버의 프라이빗 룸이 존재하는지 확인
+        clean_server_name = "".join(c for c in guild.name if c.isalnum() or c in ("-", "_"))
+        if not clean_server_name:
+            clean_server_name = "서버"
+            
+        expected_channel_name = f"괄자애정듬뿍-{clean_server_name}"[:100]
+        
+        # 기존 채널 확인
+        existing_channel = None
+        for channel in guild.text_channels:
+            if channel.name == expected_channel_name:
+                # 채널 권한에서 해당 멤버가 있는지 확인
+                overwrites = channel.overwrites
+                if member in overwrites:
+                    existing_channel = channel
+                    break
+        
+        if existing_channel:
+            print(f"이미 {member.name}님의 프라이빗 룸이 존재합니다: {existing_channel.name}")
+            processing_members.discard(member_key)
+            return
         
         # 스튜어디스 역할 찾기 (없으면 생성)
         stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
@@ -69,6 +103,7 @@ async def on_member_join(member):
                 print(f"스튜어디스 역할 생성 완료")
             except discord.Forbidden:
                 print("역할 생성 권한이 없습니다!")
+                processing_members.discard(member_key)
                 return
         
         # 프라이빗 룸 카테고리 찾기 (없으면 생성)
@@ -82,6 +117,7 @@ async def on_member_join(member):
                 print(f"프라이빗 룸 카테고리 생성 완료")
             except discord.Forbidden:
                 print("카테고리 생성 권한이 없습니다!")
+                processing_members.discard(member_key)
                 return
         
         # 권한 설정
@@ -91,12 +127,10 @@ async def on_member_join(member):
             stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
         
-        # 채널 생성 (채널명에서 특수문자 제거)
-        clean_server_name = "".join(c for c in guild.name if c.isalnum() or c in ("-", "_"))
-        if not clean_server_name:
-            clean_server_name = "서버"
-            
-        channel_name = f"괄자애정듬뿍-{clean_server_name}"[:100]  # 디스코드 채널명 길이 제한
+        # 채널명에 멤버 ID 추가로 고유성 보장
+        channel_name = f"괄자애정듬뿍-{member.name}"[:90] + f"-{member.id}"[:10]
+        # 특수문자 제거
+        channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))
         
         try:
             private_channel = await guild.create_text_channel(
@@ -108,6 +142,11 @@ async def on_member_join(member):
             print(f"프라이빗 채널 생성 완료: {private_channel.name}")
         except discord.Forbidden:
             print("채널 생성 권한이 없습니다!")
+            processing_members.discard(member_key)
+            return
+        except Exception as e:
+            print(f"채널 생성 중 오류: {e}")
+            processing_members.discard(member_key)
             return
         
         # 첫 번째 안내문
@@ -144,6 +183,10 @@ async def on_member_join(member):
         print(f"새 멤버 처리 중 오류 발생: {e}")
         import traceback
         traceback.print_exc()
+    
+    finally:
+        # 처리 완료 후 목록에서 제거
+        processing_members.discard(member_key)
 
 class MealButtonView(discord.ui.View):
     def __init__(self, member, stewardess_role, channel):
@@ -383,6 +426,43 @@ async def simulate_join_slash(interaction: discord.Interaction, 멤버: discord.
     
     await interaction.response.send_message(f"🔄 {멤버.mention}님의 참가를 시뮬레이션합니다...", ephemeral=True)
     await on_member_join(멤버)
+
+@bot.tree.command(name="중복채널정리", description="중복된 프라이빗 룸을 정리합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def cleanup_duplicate_channels(interaction: discord.Interaction):
+    guild = interaction.guild
+    await interaction.response.defer(ephemeral=True)
+    
+    # 프라이빗 룸 카테고리 찾기
+    category = discord.utils.get(guild.categories, name="프라이빗 룸")
+    if not category:
+        await interaction.followup.send("프라이빗 룸 카테고리를 찾을 수 없습니다.", ephemeral=True)
+        return
+    
+    # 채널별로 그룹화
+    channel_groups = {}
+    for channel in category.text_channels:
+        if channel.name.startswith("괄자애정듬뿍"):
+            # 멤버 ID 제거한 기본 이름으로 그룹화
+            base_name = channel.name.split("-")[0] + "-" + channel.name.split("-")[1] if len(channel.name.split("-")) >= 2 else channel.name
+            if base_name not in channel_groups:
+                channel_groups[base_name] = []
+            channel_groups[base_name].append(channel)
+    
+    deleted_count = 0
+    for base_name, channels in channel_groups.items():
+        if len(channels) > 1:
+            # 가장 오래된 채널을 제외하고 나머지 삭제
+            channels.sort(key=lambda x: x.created_at)
+            for channel in channels[1:]:
+                try:
+                    await channel.delete(reason="중복 채널 정리")
+                    deleted_count += 1
+                    print(f"중복 채널 삭제: {channel.name}")
+                except Exception as e:
+                    print(f"채널 삭제 실패: {channel.name}, 오류: {e}")
+    
+    await interaction.followup.send(f"✅ {deleted_count}개의 중복 채널을 정리했습니다.", ephemeral=True)
 
 # 기존 명령어들 (호환성을 위해)
 @bot.command(name='test')
