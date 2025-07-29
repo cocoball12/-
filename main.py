@@ -92,11 +92,11 @@ async def on_member_join(member):
         }
         
         # 채널 생성 (채널명에서 특수문자 제거)
-        clean_name = "".join(c for c in member.display_name if c.isalnum() or c in ("-", "_"))
-        if not clean_name:
-            clean_name = str(member.id)
-        
-        channel_name = f"괄자-애정듬뿍-{clean_name}"[:100]  # 디스코드 채널명 길이 제한
+        clean_server_name = "".join(c for c in guild.name if c.isalnum() or c in ("-", "_"))
+        if not clean_server_name:
+            clean_server_name = "서버"
+            
+        channel_name = f"괄자애정듬뿍-{clean_server_name}"[:100]  # 디스코드 채널명 길이 제한
         
         try:
             private_channel = await guild.create_text_channel(
@@ -151,6 +151,7 @@ class MealButtonView(discord.ui.View):
         self.member = member
         self.stewardess_role = stewardess_role
         self.channel = channel
+        self.used = False  # 버튼이 사용되었는지 확인
 
     async def on_timeout(self):
         # 타임아웃 시 버튼 비활성화
@@ -171,15 +172,43 @@ class MealButtonView(discord.ui.View):
         if interaction.user != self.member:
             await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
             return False
+        if self.used:
+            await interaction.response.send_message("이미 선택하셨습니다.", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label='한식', style=discord.ButtonStyle.primary, emoji='🍚')
     async def korean_food(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.used = True  # 버튼 사용됨 표시
+        
+        # 디생러 역할 찾기 또는 생성
+        guild = interaction.guild
+        designer_role = discord.utils.get(guild.roles, name="디생러")
+        if not designer_role:
+            try:
+                designer_role = await guild.create_role(
+                    name="디생러",
+                    color=discord.Color.pink(),
+                    reason="한식 버튼 선택자를 위한 역할 생성"
+                )
+                print(f"디생러 역할 생성 완료")
+            except discord.Forbidden:
+                print("역할 생성 권한이 없습니다!")
+        
+        # 디생러 역할 추가
+        if designer_role:
+            try:
+                await self.member.add_roles(designer_role, reason="한식 버튼 선택")
+                print(f"{self.member.name}님에게 디생러 역할 추가")
+            except discord.Forbidden:
+                print(f"역할 추가 권한이 없습니다!")
+        
         embed = discord.Embed(
             title="# 당신은 공항에 입장하실 수 있습니다",
             description="**## 서버원들과 좀더 친해지고싶으시다면 버튼을 눌러주세요**\n\n"
                        "-# 공항이 보이는건 자율적입니다. 울타리 친목이 존재하는 곳이니 이점 숙지 바랍니다.\n"
-                       "추후에 공항 채널을 안보이게 하고싶으시다면 #요청사항 의 티켓을 열어 @정규직 을 태그해 알려주시기 바랍니다",
+                       "추후에 공항 채널을 안보이게 하고싶으시다면 #요청사항 의 티켓을 열어 @정규직 을 태그해 알려주시기 바랍니다\n\n"
+                       f"✅ **디생러** 역할이 추가되었습니다!",
             color=discord.Color.blue()
         )
         
@@ -201,8 +230,66 @@ class MealButtonView(discord.ui.View):
 
     @discord.ui.button(label='승무원', style=discord.ButtonStyle.secondary, emoji='✈️')
     async def stewardess(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.used = True  # 버튼 사용됨 표시
+        
+        guild = interaction.guild
+        
+        # 디생러 역할 찾기 또는 생성
+        designer_role = discord.utils.get(guild.roles, name="디생러")
+        if not designer_role:
+            try:
+                designer_role = await guild.create_role(
+                    name="디생러",
+                    color=discord.Color.pink(),
+                    reason="승무원 버튼 선택자를 위한 역할 생성"
+                )
+                print(f"디생러 역할 생성 완료")
+            except discord.Forbidden:
+                print("역할 생성 권한이 없습니다!")
+        
+        # 디생러 역할 추가
+        if designer_role:
+            try:
+                await self.member.add_roles(designer_role, reason="승무원 버튼 선택")
+                print(f"{self.member.name}님에게 디생러 역할 추가")
+            except discord.Forbidden:
+                print(f"역할 추가 권한이 없습니다!")
+        
+        # 성별 역할 확인 및 닉네임 변경
+        male_role = discord.utils.get(guild.roles, name="남자")
+        female_role = discord.utils.get(guild.roles, name="여자")
+        
+        current_nick = self.member.display_name
+        new_nick = current_nick
+        gender_info = ""
+        
+        # 이미 (애플) 또는 (피치)가 있는지 확인
+        if not (current_nick.startswith("(애플)") or current_nick.startswith("(피치)")):
+            if male_role in self.member.roles:
+                new_nick = f"(애플) {current_nick}"
+                gender_info = "✅ 닉네임 앞에 **(애플)**이 추가되었습니다!"
+            elif female_role in self.member.roles:
+                new_nick = f"(피치) {current_nick}"
+                gender_info = "✅ 닉네임 앞에 **(피치)**가 추가되었습니다!"
+            else:
+                gender_info = "⚠️ 남자 또는 여자 역할이 없어 닉네임이 변경되지 않았습니다."
+            
+            # 닉네임 변경 시도
+            if new_nick != current_nick:
+                try:
+                    await self.member.edit(nick=new_nick, reason="승무원 버튼 선택으로 인한 닉네임 변경")
+                    print(f"{self.member.name}님의 닉네임을 {new_nick}으로 변경")
+                except discord.Forbidden:
+                    gender_info = "⚠️ 닉네임 변경 권한이 없습니다."
+                except discord.HTTPException:
+                    gender_info = "⚠️ 닉네임 변경 중 오류가 발생했습니다."
+        else:
+            gender_info = "ℹ️ 이미 성별 표시가 있는 닉네임입니다."
+        
         embed = discord.Embed(
-            description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳",
+            description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
+                       f"✅ **디생러** 역할이 추가되었습니다!\n"
+                       f"{gender_info}",
             color=discord.Color.orange()
         )
         
@@ -240,15 +327,20 @@ class FinalButtonView(discord.ui.View):
         super().__init__(timeout=None)  # 영구적으로 유지
         self.member = member
         self.channel = channel
+        self.used = False  # 버튼이 사용되었는지 확인
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user != self.member:
             await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
             return False
+        if self.used:
+            await interaction.response.send_message("이미 선택하셨습니다.", ephemeral=True)
+            return False
         return True
 
     @discord.ui.button(label='삭제', style=discord.ButtonStyle.danger, emoji='🗑️')
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.used = True  # 버튼 사용됨 표시
         await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
         
         await asyncio.sleep(3)
@@ -262,6 +354,7 @@ class FinalButtonView(discord.ui.View):
 
     @discord.ui.button(label='유지', style=discord.ButtonStyle.success, emoji='💚')
     async def keep_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        self.used = True  # 버튼 사용됨 표시
         embed = discord.Embed(
             title="🎉 가이드 서비스",
             description="프라이빗 룸이 유지됩니다!\n언제든지 스튜어디스에게 문의하세요! 😊",
