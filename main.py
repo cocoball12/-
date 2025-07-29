@@ -151,7 +151,7 @@ async def on_member_join(member):
         
         # 첫 번째 안내문
         embed1 = discord.Embed(
-            title="# 프라이빗룸",
+            title="#프라이빗룸",
             description=f"**{member.mention} 고객님의 좌석 등급이 퍼스트로 올라 프라이빗 룸이 생성됐어요**\n\n"
                        f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
@@ -167,7 +167,7 @@ async def on_member_join(member):
         await asyncio.sleep(10)
         
         embed2 = discord.Embed(
-            title="# 즐거운 식사시간~!",
+            title="#즐거운 식사시간~!",
             description="**## 서버는 입맛에 맞으신가요?**\n\n"
                        "서버가 입맛에 맞으시다면 **한식** 버튼을\n"
                        "서버가 입맛에 맞지 않으시다면 **승무원** 버튼을 눌러주세요\n\n"
