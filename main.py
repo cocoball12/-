@@ -277,27 +277,6 @@ class MealButtonView(discord.ui.View):
         
         guild = interaction.guild
         
-        # 디생러 역할 찾기 또는 생성
-        designer_role = discord.utils.get(guild.roles, name="디생러")
-        if not designer_role:
-            try:
-                designer_role = await guild.create_role(
-                    name="디생러",
-                    color=discord.Color.pink(),
-                    reason="승무원 버튼 선택자를 위한 역할 생성"
-                )
-                print(f"디생러 역할 생성 완료")
-            except discord.Forbidden:
-                print("역할 생성 권한이 없습니다!")
-        
-        # 디생러 역할 추가
-        if designer_role:
-            try:
-                await self.member.add_roles(designer_role, reason="승무원 버튼 선택")
-                print(f"{self.member.name}님에게 디생러 역할 추가")
-            except discord.Forbidden:
-                print(f"역할 추가 권한이 없습니다!")
-        
         # 성별 역할 확인 및 닉네임 변경
         male_role = discord.utils.get(guild.roles, name="남자")
         female_role = discord.utils.get(guild.roles, name="여자")
@@ -331,7 +310,6 @@ class MealButtonView(discord.ui.View):
         
         embed = discord.Embed(
             description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
-                       f"✅ **디생러** 역할이 추가되었습니다!\n"
                        f"{gender_info}",
             color=discord.Color.orange()
         )
