@@ -69,17 +69,16 @@ async def on_member_join(member):
     try:
         print(f"새 멤버 참가: {member.name} (ID: {member.id})")
         
-        # 이미 해당 멤버의 프라이빗 룸이 존재하는지 확인
-        clean_server_name = "".join(c for c in guild.name if c.isalnum() or c in ("-", "_"))
-        if not clean_server_name:
-            clean_server_name = "서버"
-            
-        expected_channel_name = f"괄자애정듬뿍-{clean_server_name}"[:100]
+        # 서버에서 사용하는 실제 닉네임 가져오기 (display_name 사용)
+        member_display_name = member.display_name
+        
+        # 이미 해당 멤버의 프라이빗 룸이 존재하는지 확인하기 위한 패턴
+        expected_channel_pattern = f"괄자애정듬뿍-{member_display_name}-{member.id}"
         
         # 기존 채널 확인
         existing_channel = None
         for channel in guild.text_channels:
-            if channel.name == expected_channel_name:
+            if channel.name.startswith(f"괄자애정듬뿍-") and str(member.id) in channel.name:
                 # 채널 권한에서 해당 멤버가 있는지 확인
                 overwrites = channel.overwrites
                 if member in overwrites:
@@ -127,10 +126,10 @@ async def on_member_join(member):
             stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
         }
         
-        # 채널명에 멤버 ID 추가로 고유성 보장
-        channel_name = f"괄자애정듬뿍-{member.name}"[:90] + f"-{member.id}"[:10]
-        # 특수문자 제거
-        channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))
+        # 채널명에 실제 서버 닉네임과 멤버 ID 사용하여 고유성 보장
+        channel_name = f"괄자애정듬뿍-{member_display_name}-{member.id}"
+        # 특수문자 제거 및 길이 제한
+        channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))[:100]
         
         try:
             private_channel = await guild.create_text_channel(
@@ -379,8 +378,32 @@ class FinalButtonView(discord.ui.View):
             for item in self.children:
                 item.disabled = True
             
-            # 응답 전송
-            await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
+            # 닉네임에서 (피치), (애플) 제거
+            current_nick = self.member.display_name
+            new_nick = current_nick
+            
+            if current_nick.startswith("(피치) "):
+                new_nick = current_nick[4:]  # "(피치) " 제거 (4글자)
+            elif current_nick.startswith("(애플) "):
+                new_nick = current_nick[4:]  # "(애플) " 제거 (4글자)
+            
+            # 닉네임 변경 시도
+            if new_nick != current_nick:
+                try:
+                    await self.member.edit(nick=new_nick, reason="프라이빗 룸 삭제 시 성별 표시 제거")
+                    print(f"{self.member.name}님의 닉네임에서 성별 표시 제거: {current_nick} -> {new_nick}")
+                    
+                    # 응답 전송 (닉네임 변경 성공)
+                    await interaction.response.send_message("닉네임에서 성별 표시가 제거되었습니다. 프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
+                except discord.Forbidden:
+                    print("닉네임 변경 권한이 없습니다.")
+                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. (닉네임 변경 권한이 없어 성별 표시는 제거되지 않았습니다) 👋")
+                except discord.HTTPException:
+                    print("닉네임 변경 중 오류가 발생했습니다.")
+                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. (닉네임 변경 중 오류 발생) 👋")
+            else:
+                # 닉네임에 성별 표시가 없는 경우
+                await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
             
             # 원본 메시지의 버튼 비활성화
             if self.message:
