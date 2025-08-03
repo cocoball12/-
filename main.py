@@ -180,21 +180,29 @@ async def on_member_join(member):
         
         # 기존 채널 확인 (중복 생성 방지 강화)
         existing_channel = None
-        for category in guild.categories:
-            if category.name == "프라이빗 룸":
-                for channel in category.text_channels:
-                    if (channel.name.startswith(f"프라이빗룸-") and 
-                        (f"-{member_display_name}" in channel.name or f"-{member.name}" in channel.name)):
-                        # 채널 권한에서 해당 멤버가 있는지 확인
-                        overwrites = channel.overwrites
-                        if member in overwrites:
-                            existing_channel = channel
-                            break
-                if existing_channel:
-                    break
         
+        # 전체 길드에서 해당 멤버의 프라이빗 룸 검색
+        for channel in guild.text_channels:
+            if channel.name.startswith("프라이빗룸-"):
+                # 채널명에 멤버 이름이 포함되어 있는지 확인
+                if (f"-{member_display_name}" in channel.name or 
+                    f"-{member.name}" in channel.name or
+                    member.display_name.lower() in channel.name.lower() or
+                    member.name.lower() in channel.name.lower()):
+                    # 채널 권한에서 해당 멤버가 있는지 확인
+                    overwrites = channel.overwrites
+                    if member in overwrites:
+                        existing_channel = channel
+                        break
+        
+        # 기존 채널이 있으면 중복 생성하지 않음
         if existing_channel:
             print(f"이미 {member.name}님의 프라이빗 룸이 존재합니다: {existing_channel.name}")
+            # 기존 채널에 알림 메시지 전송
+            try:
+                await existing_channel.send(f"{member.mention}님이 다시 서버에 참가하셨습니다! 🎉")
+            except:
+                pass
             processing_members.discard(member_key)
             return
         
@@ -236,6 +244,15 @@ async def on_member_join(member):
         channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))[:100]
         
         try:
+            # 채널 생성 직전에 한 번 더 확인
+            for channel in guild.text_channels:
+                if (channel.name.startswith("프라이빗룸-") and 
+                    (f"-{member_display_name}" in channel.name or f"-{member.name}" in channel.name) and
+                    member in channel.overwrites):
+                    print(f"채널 생성 직전 중복 발견: {channel.name}")
+                    processing_members.discard(member_key)
+                    return
+            
             private_channel = await guild.create_text_channel(
                 channel_name,
                 category=category,
@@ -243,6 +260,27 @@ async def on_member_join(member):
                 reason=f"{member.name}님을 위한 프라이빗 룸 생성"
             )
             print(f"프라이빗 채널 생성 완료: {private_channel.name}")
+            
+            # 채널 생성 후 즉시 중복 채널 확인 및 정리
+            await asyncio.sleep(0.5)  # 잠시 대기
+            duplicate_channels = []
+            for channel in guild.text_channels:
+                if (channel.name.startswith("프라이빗룸-") and 
+                    (f"-{member_display_name}" in channel.name or f"-{member.name}" in channel.name) and
+                    member in channel.overwrites and
+                    channel.id != private_channel.id):  # 방금 생성한 채널은 제외
+                    duplicate_channels.append(channel)
+            
+            # 중복 채널이 있으면 오래된 것부터 삭제
+            if duplicate_channels:
+                duplicate_channels.sort(key=lambda x: x.created_at)
+                for old_channel in duplicate_channels:
+                    try:
+                        await old_channel.delete(reason=f"중복 프라이빗 룸 정리 - {member.name}")
+                        print(f"중복 채널 삭제: {old_channel.name}")
+                    except Exception as e:
+                        print(f"중복 채널 삭제 실패: {old_channel.name}, 오류: {e}")
+                        
         except discord.Forbidden:
             print("채널 생성 권한이 없습니다!")
             processing_members.discard(member_key)
