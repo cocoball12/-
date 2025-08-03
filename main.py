@@ -1,11 +1,12 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import asyncio
 import os
 from threading import Thread
 from flask import Flask
 import json
 from datetime import datetime
+import random
 
 # 환경변수 로드 시도
 try:
@@ -44,6 +45,21 @@ processing_members = set()
 # 사용자 데이터를 저장할 딕셔너리 (메모리 기반)
 user_data = {}
 
+# Keep-alive 시스템용 변수들
+keep_alive_channels = {}  # 길드별 keep-alive 채널 저장
+keep_alive_messages = [
+    "🤖 시스템 정상 작동 중...",
+    "⚡ 서버 활성 상태 유지 중...",
+    "🔄 백그라운드 작업 실행 중...",
+    "💫 봇 상태 체크 완료!",
+    "🛡️ 서비스 모니터링 중...",
+    "🎯 시스템 헬스체크 완료",
+    "🚀 모든 시스템 정상",
+    "⭐ 서버 연결 상태 양호",
+    "🔧 자동 유지보수 실행 중",
+    "💎 최적 상태로 운영 중"
+]
+
 def save_user_join(guild_id, user_id):
     """사용자 입장 기록 저장"""
     key = f"{guild_id}_{user_id}"
@@ -64,6 +80,44 @@ def is_first_join(guild_id, user_id):
     key = f"{guild_id}_{user_id}"
     return key not in user_data
 
+# Keep-alive 작업 (3분마다 실행)
+@tasks.loop(minutes=3)
+async def keep_alive_task():
+    try:
+        for guild_id, channel_id in keep_alive_channels.items():
+            guild = bot.get_guild(guild_id)
+            if guild:
+                channel = guild.get_channel(channel_id)
+                if channel:
+                    # 랜덤 메시지 선택
+                    message = random.choice(keep_alive_messages)
+                    current_time = datetime.now().strftime("%H:%M:%S")
+                    full_message = f"{message} | {current_time}"
+                    
+                    try:
+                        # 이전 메시지 삭제 (최대 5개까지만 유지)
+                        messages = []
+                        async for msg in channel.history(limit=10):
+                            if msg.author == bot.user:
+                                messages.append(msg)
+                        
+                        # 5개를 초과하면 오래된 메시지 삭제
+                        if len(messages) >= 5:
+                            for msg in messages[4:]:  # 4번째 이후 메시지들 삭제
+                                try:
+                                    await msg.delete()
+                                except:
+                                    pass
+                        
+                        await channel.send(full_message)
+                        print(f"Keep-alive 메시지 전송: {guild.name} - {full_message}")
+                    except Exception as e:
+                        print(f"Keep-alive 메시지 전송 실패 ({guild.name}): {e}")
+                else:
+                    print(f"Keep-alive 채널을 찾을 수 없음: {guild.name}")
+    except Exception as e:
+        print(f"Keep-alive 작업 중 오류: {e}")
+
 # 봇이 준비되었을 때
 @bot.event
 async def on_ready():
@@ -76,6 +130,25 @@ async def on_ready():
         print(f"슬래시 커맨드 {len(synced)}개 동기화 완료")
     except Exception as e:
         print(f"슬래시 커맨드 동기화 실패: {e}")
+    
+    # 각 길드에서 keep-alive 채널 찾기 (없으면 생성하지 않음)
+    for guild in bot.guilds:
+        keep_alive_channel = discord.utils.get(guild.text_channels, name="봇-시스템-로그")
+        if keep_alive_channel:
+            keep_alive_channels[guild.id] = keep_alive_channel.id
+            print(f"Keep-alive 채널 발견: {guild.name} - {keep_alive_channel.name}")
+    
+    # Keep-alive 작업 시작
+    if not keep_alive_task.is_running():
+        keep_alive_task.start()
+        print("🚀 Keep-alive 시스템 시작됨 (3분 간격)")
+
+# 길드 참가 시 keep-alive 채널 설정
+@bot.event
+async def on_guild_join(guild):
+    keep_alive_channel = discord.utils.get(guild.text_channels, name="봇-시스템-로그")
+    if keep_alive_channel:
+        keep_alive_channels[guild.id] = keep_alive_channel.id
 
 # 멤버가 서버에서 나갔을 때
 @bot.event
@@ -317,7 +390,7 @@ async def on_member_join(member):
         message2 += "**## 서버는 입맛에 맞으신가요?**\n"
         message2 += "서버가 입맛에 맞으시다면 **🍚한식** 버튼을\n"
         message2 += "서버가 입맛에 맞지 않으시다면 **🆘승무원** 버튼을 눌러주세요\n\n"
-        message2 += " -# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!"
+        message2 += "승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!"
         
         view = MealButtonView(member, stewardess_role, private_channel, is_first)
         await private_channel.send(message2, view=view)
@@ -392,10 +465,10 @@ class MealButtonView(discord.ui.View):
         
         welcome_text = "서버 적응에 탁월한 당신" if self.is_first_join else "서버에 다시 오신 당신"
         
-        response_message = f"{welcome_text} # 공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
+        response_message = f"{welcome_text}  #💬ㆍ공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
         response_message += "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
-        response_message += "-# 마일리지는 추후 상품으로 교환 가능합니다.\n\n"
-        response_message += "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 해주세요."
+        response_message += "마일리지는 추후 상품으로 교환 가능합니다.\n\n"
+        response_message += "**아직 서버 적응이 더 필요해서** #💬ㆍ공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인 을 멘션하시고 #공항 채널을 안보이게 해달라고 해주세요."
         
         await interaction.response.send_message(response_message)
         
@@ -876,6 +949,152 @@ async def cleanup_package_channels(interaction: discord.Interaction):
     
     await interaction.followup.send(f"✅ {deleted_count}개의 중복 패키지 여행 채널을 정리했습니다.", ephemeral=True)
 
+# Keep-alive 시스템 관리 명령어들 (관리자 전용)
+@bot.tree.command(name="킵얼라이브설정", description="Keep-alive 채널을 설정합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def setup_keepalive(interaction: discord.Interaction):
+    guild = interaction.guild
+    
+    # 봇-시스템-로그 채널 찾기
+    keep_alive_channel = discord.utils.get(guild.text_channels, name="봇-시스템-로그")
+    
+    if not keep_alive_channel:
+        # 채널이 없으면 생성
+        try:
+            # 시스템 카테고리 찾기 (없으면 생성)
+            system_category = discord.utils.get(guild.categories, name="시스템")
+            if not system_category:
+                system_category = await guild.create_category(
+                    "시스템",
+                    reason="봇 시스템용 카테고리 생성"
+                )
+            
+            # 권한 설정 - 관리자만 볼 수 있도록
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(read_messages=False),
+                guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            }
+            
+            # 관리자 권한이 있는 역할들에게 읽기 권한 부여
+            for role in guild.roles:
+                if role.permissions.administrator:
+                    overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=False)
+            
+            keep_alive_channel = await guild.create_text_channel(
+                "봇-시스템-로그",
+                category=system_category,
+                overwrites=overwrites,
+                reason="Keep-alive 시스템용 채널 생성"
+            )
+            
+            # 채널 토픽 설정
+            await keep_alive_channel.edit(
+                topic="🤖 봇 Keep-alive 시스템 로그 채널 | 3분마다 자동 메시지 전송으로 서버 슬립 방지"
+            )
+            
+            await interaction.response.send_message(
+                f"✅ Keep-alive 채널이 생성되었습니다: {keep_alive_channel.mention}\n"
+                f"이제 3분마다 자동으로 메시지가 전송되어 서버 슬립을 방지합니다.",
+                ephemeral=True
+            )
+            
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ 채널 생성 권한이 없습니다!", ephemeral=True)
+            return
+        except Exception as e:
+            await interaction.response.send_message(f"❌ 채널 생성 중 오류: {e}", ephemeral=True)
+            return
+    else:
+        await interaction.response.send_message(
+            f"✅ Keep-alive 채널이 이미 존재합니다: {keep_alive_channel.mention}",
+            ephemeral=True
+        )
+    
+    # 채널 ID 저장
+    keep_alive_channels[guild.id] = keep_alive_channel.id
+    print(f"Keep-alive 채널 설정 완료: {guild.name} - {keep_alive_channel.name}")
+
+@bot.tree.command(name="킵얼라이브상태", description="Keep-alive 시스템 상태를 확인합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def keepalive_status(interaction: discord.Interaction):
+    guild = interaction.guild
+    
+    status_message = "**🤖 Keep-alive 시스템 상태**\n\n"
+    
+    # 작업 상태 확인
+    if keep_alive_task.is_running():
+        status_message += "**작업 상태**: ✅ 실행 중 (3분 간격)\n"
+        status_message += f"**다음 실행**: {keep_alive_task.next_iteration.strftime('%H:%M:%S') if keep_alive_task.next_iteration else '알 수 없음'}\n\n"
+    else:
+        status_message += "**작업 상태**: ❌ 중지됨\n\n"
+    
+    # 현재 길드의 채널 상태
+    if guild.id in keep_alive_channels:
+        channel_id = keep_alive_channels[guild.id]
+        channel = guild.get_channel(channel_id)
+        if channel:
+            status_message += f"**현재 서버 채널**: {channel.mention}\n"
+            status_message += f"**채널 ID**: {channel_id}\n"
+        else:
+            status_message += f"**현재 서버 채널**: ❌ 채널을 찾을 수 없음 (ID: {channel_id})\n"
+    else:
+        status_message += "**현재 서버 채널**: ❌ 설정되지 않음\n"
+    
+    # 전체 서버 수
+    status_message += f"\n**총 관리 서버**: {len(keep_alive_channels)}개\n"
+    status_message += f"**연결된 서버**: {len(bot.guilds)}개"
+    
+    await interaction.response.send_message(status_message, ephemeral=True)
+
+@bot.tree.command(name="킵얼라이브중지", description="Keep-alive 시스템을 중지합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def stop_keepalive(interaction: discord.Interaction):
+    if keep_alive_task.is_running():
+        keep_alive_task.cancel()
+        await interaction.response.send_message("✅ Keep-alive 시스템이 중지되었습니다.", ephemeral=True)
+        print("Keep-alive 시스템 중지됨")
+    else:
+        await interaction.response.send_message("❌ Keep-alive 시스템이 이미 중지되어 있습니다.", ephemeral=True)
+
+@bot.tree.command(name="킵얼라이브시작", description="Keep-alive 시스템을 시작합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def start_keepalive(interaction: discord.Interaction):
+    if not keep_alive_task.is_running():
+        keep_alive_task.start()
+        await interaction.response.send_message("✅ Keep-alive 시스템이 시작되었습니다.", ephemeral=True)
+        print("Keep-alive 시스템 시작됨")
+    else:
+        await interaction.response.send_message("❌ Keep-alive 시스템이 이미 실행 중입니다.", ephemeral=True)
+
+@bot.tree.command(name="킵얼라이브테스트", description="Keep-alive 메시지를 즉시 전송합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def test_keepalive(interaction: discord.Interaction):
+    guild = interaction.guild
+    
+    if guild.id not in keep_alive_channels:
+        await interaction.response.send_message("❌ 이 서버에 Keep-alive 채널이 설정되지 않았습니다. `/킵얼라이브설정` 명령어를 먼저 사용해주세요.", ephemeral=True)
+        return
+    
+    channel_id = keep_alive_channels[guild.id]
+    channel = guild.get_channel(channel_id)
+    
+    if not channel:
+        await interaction.response.send_message("❌ Keep-alive 채널을 찾을 수 없습니다.", ephemeral=True)
+        return
+    
+    try:
+        message = random.choice(keep_alive_messages)
+        current_time = datetime.now().strftime("%H:%M:%S")
+        full_message = f"🧪 **테스트** | {message} | {current_time}"
+        
+        await channel.send(full_message)
+        await interaction.response.send_message(f"✅ 테스트 메시지가 {channel.mention}에 전송되었습니다!", ephemeral=True)
+        print(f"Keep-alive 테스트 메시지 전송: {guild.name} - {full_message}")
+        
+    except Exception as e:
+        await interaction.response.send_message(f"❌ 메시지 전송 중 오류: {e}", ephemeral=True)
+        print(f"Keep-alive 테스트 메시지 전송 실패: {e}")
+
 # 에러 핸들링
 @bot.event
 async def on_error(event, *args, **kwargs):
@@ -894,6 +1113,22 @@ async def on_command_error(ctx, error):
     else:
         print(f'❌ 명령어 에러: {error}')
         await ctx.send("❌ 명령어 처리 중 오류가 발생했습니다.")
+
+# Keep-alive 작업 에러 처리
+@keep_alive_task.error
+async def keep_alive_error(error):
+    print(f"❌ Keep-alive 작업 오류: {error}")
+    import traceback
+    traceback.print_exc()
+    
+    # 5분 후 재시작 시도
+    await asyncio.sleep(300)
+    if not keep_alive_task.is_running():
+        try:
+            keep_alive_task.restart()
+            print("🔄 Keep-alive 작업 재시작 성공")
+        except Exception as e:
+            print(f"❌ Keep-alive 작업 재시작 실패: {e}")
 
 # 봇 및 Flask 서버 실행
 if __name__ == "__main__":
