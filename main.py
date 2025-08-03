@@ -4,6 +4,8 @@ import asyncio
 import os
 from threading import Thread
 from flask import Flask
+import json
+from datetime import datetime
 
 # 환경변수 로드 시도
 try:
@@ -39,6 +41,29 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # 처리 중인 멤버를 추적하는 집합 (중복 방지용)
 processing_members = set()
 
+# 사용자 데이터를 저장할 딕셔너리 (메모리 기반)
+user_data = {}
+
+def save_user_join(guild_id, user_id):
+    """사용자 입장 기록 저장"""
+    key = f"{guild_id}_{user_id}"
+    current_time = datetime.now().isoformat()
+    
+    if key not in user_data:
+        user_data[key] = {
+            'first_join': current_time,
+            'join_count': 1,
+            'last_join': current_time
+        }
+    else:
+        user_data[key]['join_count'] += 1
+        user_data[key]['last_join'] = current_time
+
+def is_first_join(guild_id, user_id):
+    """처음 입장인지 확인"""
+    key = f"{guild_id}_{user_id}"
+    return key not in user_data
+
 # 봇이 준비되었을 때
 @bot.event
 async def on_ready():
@@ -67,15 +92,22 @@ async def on_member_join(member):
     processing_members.add(member_key)
     
     try:
-        print(f"새 멤버 참가: {member.name} (ID: {member.id})")
+        # 처음 입장인지 재입장인지 확인
+        is_first = is_first_join(guild.id, member.id)
+        join_status = "첫 입장" if is_first else "재입장"
+        
+        print(f"새 멤버 참가: {member.name} (ID: {member.id}) - {join_status}")
+        
+        # 입장 기록 저장
+        save_user_join(guild.id, member.id)
         
         # 서버에서 사용하는 실제 닉네임 가져오기 (display_name 사용)
         member_display_name = member.display_name
         
-        # 기존 채널 확인
+        # 기존 채널 확인 (번호 코드 없이 검색)
         existing_channel = None
         for channel in guild.text_channels:
-            if channel.name.startswith(f"괄자애정듬뿍-") and str(member.id) in channel.name:
+            if channel.name.startswith(f"괄자애정듬뿍-{member_display_name}") and not channel.name.startswith(f"괄자애정듬뿍-{member_display_name}-"):
                 # 채널 권한에서 해당 멤버가 있는지 확인
                 overwrites = channel.overwrites
                 if member in overwrites:
@@ -124,8 +156,8 @@ async def on_member_join(member):
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)  # 봇 자신도 허용
         }
         
-        # 채널명에 실제 서버 닉네임과 멤버 ID 사용하여 고유성 보장
-        channel_name = f"괄자애정듬뿍-{member_display_name}-{member.id}"
+        # 채널명에 실제 서버 닉네임만 사용 (번호 코드 제거)
+        channel_name = f"괄자애정듬뿍-{member_display_name}"
         # 특수문자 제거 및 길이 제한
         channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))[:100]
         
@@ -146,14 +178,20 @@ async def on_member_join(member):
             processing_members.discard(member_key)
             return
         
+        # 입장 상태에 따른 메시지 조정
+        join_status_emoji = "🎉" if is_first else "🔄"
+        join_status_text = "처음 오신 것을 환영합니다!" if is_first else "다시 오신 것을 환영합니다!"
+        
         # 첫 번째 안내문
         embed1 = discord.Embed(
-            title="#프라이빗룸",
+            title=f"#프라이빗룸 {join_status_emoji}",
             description=f"**{member.mention} 고객님의 좌석 등급이 퍼스트로 올라 프라이빗 룸이 생성됐어요**\n\n"
+                       f"**{join_status_text}**\n\n"
                        f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
-                       f"-# 좌석 등급 하향은 서버 추방입니다",
+                       f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
+                       f"📊 **입장 정보**: {join_status} ({user_data[f'{guild.id}_{member.id}']['join_count']}번째 입장)",
             color=discord.Color.gold()
         )
         
@@ -172,7 +210,7 @@ async def on_member_join(member):
             color=discord.Color.green()
         )
         
-        view = MealButtonView(member, stewardess_role, private_channel)
+        view = MealButtonView(member, stewardess_role, private_channel, is_first)
         await private_channel.send(embed=embed2, view=view)
         print(f"두 번째 안내문과 버튼 전송 완료")
         
@@ -186,11 +224,12 @@ async def on_member_join(member):
         processing_members.discard(member_key)
 
 class MealButtonView(discord.ui.View):
-    def __init__(self, member, stewardess_role, channel):
+    def __init__(self, member, stewardess_role, channel, is_first_join=True):
         super().__init__(timeout=300)  # 5분 타임아웃
         self.member = member
         self.stewardess_role = stewardess_role
         self.channel = channel
+        self.is_first_join = is_first_join
         self.used = False  # 버튼이 사용되었는지 확인
 
     async def on_timeout(self):
@@ -243,8 +282,10 @@ class MealButtonView(discord.ui.View):
             except discord.Forbidden:
                 print(f"역할 추가 권한이 없습니다!")
         
+        welcome_text = "서버 적응에 탁월한 당신" if self.is_first_join else "서버에 다시 오신 당신"
+        
         embed = discord.Embed(
-            description="서버 적응에 탁월한 당신 #공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
+            description=f"{welcome_text} #공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
                        "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
                        "-# 마일리지는 추후 상품으로 교환 가능합니다.\n\n"
                        "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 하면 공항 채널이 자동 삭제 됩니다.\n\n"
@@ -474,6 +515,33 @@ async def simulate_join_slash(interaction: discord.Interaction, 멤버: discord.
     await interaction.response.send_message(f"🔄 {멤버.mention}님의 참가를 시뮬레이션합니다...", ephemeral=True)
     await on_member_join(멤버)
 
+@bot.tree.command(name="사용자정보", description="사용자의 입장 정보를 확인합니다")
+async def user_info_slash(interaction: discord.Interaction, 멤버: discord.Member = None):
+    if not 멤버:
+        멤버 = interaction.user
+    
+    guild_id = interaction.guild.id
+    user_id = 멤버.id
+    key = f"{guild_id}_{user_id}"
+    
+    if key in user_data:
+        data = user_data[key]
+        embed = discord.Embed(
+            title=f"📊 {멤버.display_name}님의 서버 정보",
+            description=f"**첫 입장**: {data['first_join'][:19].replace('T', ' ')}\n"
+                       f"**총 입장 횟수**: {data['join_count']}회\n"
+                       f"**마지막 입장**: {data['last_join'][:19].replace('T', ' ')}",
+            color=discord.Color.blue()
+        )
+    else:
+        embed = discord.Embed(
+            title=f"📊 {멤버.display_name}님의 서버 정보",
+            description="아직 입장 기록이 없습니다.",
+            color=discord.Color.gray()
+        )
+    
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
 @bot.tree.command(name="중복채널정리", description="중복된 프라이빗 룸을 정리합니다 (관리자 전용)")
 @discord.app_commands.default_permissions(administrator=True)
 async def cleanup_duplicate_channels(interaction: discord.Interaction):
@@ -486,12 +554,17 @@ async def cleanup_duplicate_channels(interaction: discord.Interaction):
         await interaction.followup.send("프라이빗 룸 카테고리를 찾을 수 없습니다.", ephemeral=True)
         return
     
-    # 채널별로 그룹화
+    # 채널별로 그룹화 (번호 코드 제거된 새로운 형식 기준)
     channel_groups = {}
     for channel in category.text_channels:
         if channel.name.startswith("괄자애정듬뿍"):
-            # 멤버 ID 제거한 기본 이름으로 그룹화
-            base_name = channel.name.split("-")[0] + "-" + channel.name.split("-")[1] if len(channel.name.split("-")) >= 2 else channel.name
+            # 기본 이름으로 그룹화 (닉네임 부분만)
+            parts = channel.name.split("-")
+            if len(parts) >= 2:
+                base_name = f"{parts[0]}-{parts[1]}"  # 괄자애정듬뿍-닉네임
+            else:
+                base_name = channel.name
+            
             if base_name not in channel_groups:
                 channel_groups[base_name] = []
             channel_groups[base_name].append(channel)
