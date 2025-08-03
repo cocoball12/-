@@ -193,33 +193,13 @@ async def on_member_join(member):
             processing_members.discard(member_key)
             return
         
-        # 스튜어디스 역할 찾기 (없으면 생성)
+        # 스튜어디스 역할 찾기 
         stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
-        if not stewardess_role:
-            try:
-                stewardess_role = await guild.create_role(
-                    name="스튜어디스", 
-                    color=discord.Color.blue(),
-                    reason="프라이빗 룸 시스템용 역할 생성"
-                )
-                print(f"스튜어디스 역할 생성 완료")
-            except discord.Forbidden:
-                print("역할 생성 권한이 없습니다!")
-                processing_members.discard(member_key)
-                return
+     
         
-        # 스카이호스트 역할 찾기 (없으면 생성)
+        # 스카이호스트 역할 찾기 
         skyhost_role = discord.utils.get(guild.roles, name="스카이호스트")
-        if not skyhost_role:
-            try:
-                skyhost_role = await guild.create_role(
-                    name="스카이호스트", 
-                    color=discord.Color.purple(),
-                    reason="프라이빗 룸 시스템용 역할 생성"
-                )
-                print(f"스카이호스트 역할 생성 완료")
-            except discord.Forbidden:
-                print("스카이호스트 역할 생성 권한이 없습니다!")
+    
         
         # 프라이빗 룸 카테고리 찾기 (없으면 생성)
         category = discord.utils.get(guild.categories, name="프라이빗 룸")
@@ -276,13 +256,11 @@ async def on_member_join(member):
         # 첫 번째 안내문
         embed1 = discord.Embed(
             title=f"#프라이빗룸 {join_status_emoji}",
-            description=f"**{member.mention} 고객님의 좌석 등급이 퍼스트로 올라 프라이빗 룸이 생성됐어요**\n\n"
-                       f"**{join_status_text}**\n\n"
-                       f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
+            description=f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
                        f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
-                       f"📊 **입장 정보**: {join_status} ({user_data[f'{guild.id}_{member.id}']['join_count']}번째 입장)",
+                       f" **입장 정보**: {join_status} ({user_data[f'{guild.id}_{member.id}']['join_count']}번째 입장)",
             color=discord.Color.gold()
         )
         
@@ -293,7 +271,7 @@ async def on_member_join(member):
         await asyncio.sleep(10)
         
         embed2 = discord.Embed(
-            title="#즐거운 식사시간~!",
+            title="# 즐거운 식사시간~!",
             description="**## 서버는 입맛에 맞으신가요?**\n\n"
                        "서버가 입맛에 맞으시다면 **한식** 버튼을\n"
                        "서버가 입맛에 맞지 않으시다면 **승무원** 버튼을 눌러주세요\n\n"
@@ -316,7 +294,7 @@ async def on_member_join(member):
 
 class MealButtonView(discord.ui.View):
     def __init__(self, member, stewardess_role, channel, is_first_join=True):
-        super().__init__(timeout=300)  # 5분 타임아웃
+        super().__init__(timeout=172800)  # 48시간 타임아웃
         self.member = member
         self.stewardess_role = stewardess_role
         self.channel = channel
@@ -376,7 +354,7 @@ class MealButtonView(discord.ui.View):
         welcome_text = "서버 적응에 탁월한 당신" if self.is_first_join else "서버에 다시 오신 당신"
         
         embed = discord.Embed(
-            description=f"{welcome_text} #공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
+            description=f"{welcome_text} # 공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
                        "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
                        "-# 마일리지는 추후 상품으로 교환 가능합니다.\n\n"
                        "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 하면 공항 채널이 자동 삭제 됩니다.",
@@ -399,7 +377,7 @@ class MealButtonView(discord.ui.View):
         await asyncio.sleep(15)
         await self.send_final_message()
 
-    @discord.ui.button(label='승무원', style=discord.ButtonStyle.secondary, emoji='✈️')
+    @discord.ui.button(label='승무원', style=discord.ButtonStyle.secondary, emoji='🆘')
     async def stewardess(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.used = True  # 버튼 사용됨 표시
         
@@ -417,10 +395,10 @@ class MealButtonView(discord.ui.View):
         if not (current_nick.startswith("(애플)") or current_nick.startswith("(피치)")):
             if male_role in self.member.roles:
                 new_nick = f"(애플) {current_nick}"
-                gender_info = "✅ 닉네임 앞에 **(애플)**이 추가되었습니다!"
+                gender_info = "✅  **(애플)**이 추가되었습니다!"
             elif female_role in self.member.roles:
                 new_nick = f"(피치) {current_nick}"
-                gender_info = "✅ 닉네임 앞에 **(피치)**가 추가되었습니다!"
+                gender_info = "✅  **(피치)**가 추가되었습니다!"
             else:
                 gender_info = "⚠️ 남자 또는 여자 역할이 없어 닉네임이 변경되지 않았습니다."
             
@@ -580,19 +558,10 @@ class FinalButtonView(discord.ui.View):
             # 스카이호스트 역할 찾기
             skyhost_role = discord.utils.get(guild.roles, name="스카이호스트")
             
-            # 가이드 역할 찾기 (없으면 생성)
+            # 가이드 역할 찾기 
             guide_role = discord.utils.get(guild.roles, name="가이드")
             if not guide_role:
-                try:
-                    guide_role = await guild.create_role(
-                        name="가이드", 
-                        color=discord.Color.orange(),
-                        reason="패키지 여행 시스템용 역할 생성"
-                    )
-                    print(f"가이드 역할 생성 완료")
-                except discord.Forbidden:
-                    print("가이드 역할 생성 권한이 없습니다!")
-            
+               
             # 패키지 여행 카테고리 찾기 (없으면 생성)
             package_category = discord.utils.get(guild.categories, name="패키지 여행")
             if not package_category:
@@ -662,7 +631,9 @@ class FinalButtonView(discord.ui.View):
                                    f"• 서버 규칙 및 이용 방법 안내\n"
                                    f"• 각종 채널 소개 및 활용법\n"
                                    f"• 서버 내 활동 가이드\n"
-                                   f"• 기타 궁금한 사항 문의\n\n"
+                                   f"• 애플 피치 제거하는 법\n"
+                                   f"• 코인 활용법\n"
+                                   f"• 기타 궁금한 사항 문의\n"
                                    f"언제든지 편하게 질문해주세요! 😊",
                         color=discord.Color.green()
                     )
@@ -738,7 +709,7 @@ async def user_info_slash(interaction: discord.Interaction, 멤버: discord.Memb
     if key in user_data:
         data = user_data[key]
         embed = discord.Embed(
-            title=f"📊 {멤버.display_name}님의 서버 정보",
+            title=f" {멤버.display_name}님의 서버 정보",
             description=f"**첫 입장**: {data['first_join'][:19].replace('T', ' ')}\n"
                        f"**총 입장 횟수**: {data['join_count']}회\n"
                        f"**마지막 입장**: {data['last_join'][:19].replace('T', ' ')}",
@@ -746,7 +717,7 @@ async def user_info_slash(interaction: discord.Interaction, 멤버: discord.Memb
         )
     else:
         embed = discord.Embed(
-            title=f"📊 {멤버.display_name}님의 서버 정보",
+            title=f" {멤버.display_name}님의 서버 정보",
             description="아직 입장 기록이 없습니다.",
             color=discord.Color.gray()
         )
