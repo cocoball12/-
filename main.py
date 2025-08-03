@@ -184,14 +184,14 @@ async def on_member_join(member):
         # 전체 길드에서 해당 멤버의 프라이빗 룸 검색
         for channel in guild.text_channels:
             if channel.name.startswith("프라이빗룸-"):
-                # 채널명에 멤버 이름이 포함되어 있는지 확인
-                if (f"-{member_display_name}" in channel.name or 
-                    f"-{member.name}" in channel.name or
-                    member.display_name.lower() in channel.name.lower() or
-                    member.name.lower() in channel.name.lower()):
-                    # 채널 권한에서 해당 멤버가 있는지 확인
-                    overwrites = channel.overwrites
-                    if member in overwrites:
+                # 채널 권한에서 해당 멤버가 있는지 먼저 확인 (더 정확함)
+                overwrites = channel.overwrites
+                if member in overwrites:
+                    # 권한이 있는 채널 중에서 이름도 매칭되는지 확인
+                    if (f"-{member_display_name}" in channel.name or 
+                        f"-{member.name}" in channel.name or
+                        member.display_name.lower() in channel.name.lower() or
+                        member.name.lower() in channel.name.lower()):
                         existing_channel = channel
                         break
         
@@ -259,27 +259,33 @@ async def on_member_join(member):
                 overwrites=overwrites,
                 reason=f"{member.name}님을 위한 프라이빗 룸 생성"
             )
-            print(f"프라이빗 채널 생성 완료: {private_channel.name}")
+            print(f"프라이빗 채널 생성 완료: {private_channel.name} (ID: {private_channel.id})")
             
-            # 채널 생성 후 즉시 중복 채널 확인 및 정리
-            await asyncio.sleep(0.5)  # 잠시 대기
+            # 채널 생성 후 충분한 시간 대기 (3초)
+            await asyncio.sleep(3)
+            
+            # 중복 채널 확인 및 정리 (방금 생성한 채널은 절대 삭제하지 않음)
             duplicate_channels = []
             for channel in guild.text_channels:
                 if (channel.name.startswith("프라이빗룸-") and 
                     (f"-{member_display_name}" in channel.name or f"-{member.name}" in channel.name) and
                     member in channel.overwrites and
-                    channel.id != private_channel.id):  # 방금 생성한 채널은 제외
+                    channel.id != private_channel.id and  # 방금 생성한 채널은 제외
+                    channel.created_at < private_channel.created_at):  # 더 오래된 채널만 선택
                     duplicate_channels.append(channel)
             
-            # 중복 채널이 있으면 오래된 것부터 삭제
+            # 중복 채널이 있으면 삭제
             if duplicate_channels:
-                duplicate_channels.sort(key=lambda x: x.created_at)
+                print(f"중복 채널 {len(duplicate_channels)}개 발견")
                 for old_channel in duplicate_channels:
                     try:
+                        print(f"중복 채널 삭제 시도: {old_channel.name} (ID: {old_channel.id})")
                         await old_channel.delete(reason=f"중복 프라이빗 룸 정리 - {member.name}")
-                        print(f"중복 채널 삭제: {old_channel.name}")
+                        print(f"중복 채널 삭제 완료: {old_channel.name}")
                     except Exception as e:
                         print(f"중복 채널 삭제 실패: {old_channel.name}, 오류: {e}")
+            else:
+                print("중복 채널 없음")
                         
         except discord.Forbidden:
             print("채널 생성 권한이 없습니다!")
@@ -483,9 +489,8 @@ class MealButtonView(discord.ui.View):
         try:
             final_message = "**목적지에 도착하셨습니다!**\n\n"
             final_message += "서버에 완벽 적응을 하셨다면 자유여행 버튼🧍을\n\n"
-            final_message += "서버적응에 도움이 필요하시다면 패키지 여행버튼👫을 눌러주세요!\n"
-            final_message += "-# 단 가이드는 무료로 제공해드립니다."
-            
+            final_message += "서버적응에 도움이 필요하시다면 패키지 여행버튼👫을 눌러주세요!"
+            final_message += " -# 단 가이드는 무료로 제공해드립니다.
             # 각 메시지마다 새로운 뷰 인스턴스 생성
             final_view = FinalButtonView(self.member, self.channel)
             message = await self.channel.send(final_message, view=final_view)
