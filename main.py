@@ -77,6 +77,80 @@ async def on_ready():
     except Exception as e:
         print(f"슬래시 커맨드 동기화 실패: {e}")
 
+# 멤버가 서버에서 나갔을 때
+@bot.event
+async def on_member_remove(member):
+    guild = member.guild
+    print(f"멤버 퇴장: {member.name} (ID: {member.id})")
+    
+    try:
+        # 해당 멤버의 프라이빗 룸 찾기 및 삭제
+        member_display_name = member.display_name
+        deleted_channels = []
+        
+        # 프라이빗 룸 카테고리에서 해당 멤버의 채널 찾기
+        private_category = discord.utils.get(guild.categories, name="프라이빗 룸")
+        if private_category:
+            for channel in private_category.text_channels:
+                # 채널명이 해당 멤버와 관련된지 확인
+                if (channel.name.startswith(f"괄자애정듬뿍-{member_display_name}") or
+                    member in channel.overwrites):
+                    try:
+                        await channel.delete(reason=f"{member.name}님이 서버를 나가서 프라이빗 룸 삭제")
+                        deleted_channels.append(f"프라이빗 룸: {channel.name}")
+                        print(f"프라이빗 룸 삭제: {channel.name}")
+                    except Exception as e:
+                        print(f"프라이빗 룸 삭제 실패: {channel.name}, 오류: {e}")
+        
+        # 패키지 여행 카테고리에서 해당 멤버의 채널 찾기
+        package_category = discord.utils.get(guild.categories, name="패키지 여행")
+        if package_category:
+            for channel in package_category.text_channels:
+                # 채널명이 해당 멤버와 관련된지 확인
+                if (channel.name.startswith(f"패키지여행-{member_display_name}") or
+                    member in channel.overwrites):
+                    try:
+                        await channel.delete(reason=f"{member.name}님이 서버를 나가서 패키지 여행 채널 삭제")
+                        deleted_channels.append(f"패키지 여행: {channel.name}")
+                        print(f"패키지 여행 채널 삭제: {channel.name}")
+                    except Exception as e:
+                        print(f"패키지 여행 채널 삭제 실패: {channel.name}, 오류: {e}")
+        
+        # 닉네임으로도 한번 더 검색 (display_name과 다를 수 있음)
+        member_name = member.name
+        if member_name != member_display_name:
+            # 프라이빗 룸에서 멤버 이름으로 검색
+            if private_category:
+                for channel in private_category.text_channels:
+                    if channel.name.startswith(f"괄자애정듬뿍-{member_name}"):
+                        try:
+                            await channel.delete(reason=f"{member.name}님이 서버를 나가서 프라이빗 룸 삭제")
+                            deleted_channels.append(f"프라이빗 룸: {channel.name}")
+                            print(f"프라이빗 룸 삭제 (이름 기준): {channel.name}")
+                        except Exception as e:
+                            print(f"프라이빗 룸 삭제 실패 (이름 기준): {channel.name}, 오류: {e}")
+            
+            # 패키지 여행에서 멤버 이름으로 검색
+            if package_category:
+                for channel in package_category.text_channels:
+                    if channel.name.startswith(f"패키지여행-{member_name}"):
+                        try:
+                            await channel.delete(reason=f"{member.name}님이 서버를 나가서 패키지 여행 채널 삭제")
+                            deleted_channels.append(f"패키지 여행: {channel.name}")
+                            print(f"패키지 여행 채널 삭제 (이름 기준): {channel.name}")
+                        except Exception as e:
+                            print(f"패키지 여행 채널 삭제 실패 (이름 기준): {channel.name}, 오류: {e}")
+        
+        if deleted_channels:
+            print(f"총 {len(deleted_channels)}개 채널 삭제 완료: {', '.join(deleted_channels)}")
+        else:
+            print(f"{member.name}님과 관련된 채널을 찾지 못했습니다.")
+            
+    except Exception as e:
+        print(f"멤버 퇴장 처리 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
+
 # 멤버가 서버에 참가했을 때
 @bot.event
 async def on_member_join(member):
@@ -510,8 +584,7 @@ class FinalButtonView(discord.ui.View):
             if existing_package_channel:
                 await interaction.response.send_message(
                     f"✅ 이미 패키지 여행 채널이 존재합니다: {existing_package_channel.mention}\n"
-                    f"프라이빗 룸이 유지됩니다!",
-                    ephemeral=False
+                    f"프라이빗 룸이 곧 삭제됩니다. 패키지 여행 채널을 이용해주세요! 👋"
                 )
             else:
                 # 패키지 여행 채널 생성
@@ -557,7 +630,7 @@ class FinalButtonView(discord.ui.View):
                     
                     await interaction.response.send_message(
                         f"✅ 패키지 여행 채널이 생성되었습니다: {package_channel.mention}\n"
-                        f"프라이빗 룸이 유지됩니다! 언제든지 가이드 서비스를 이용해주세요! 😊"
+                        f"프라이빗 룸이 곧 삭제됩니다. 패키지 여행 채널을 이용해주세요! 😊"
                     )
                     
                 except discord.Forbidden:
@@ -578,6 +651,18 @@ class FinalButtonView(discord.ui.View):
                     await self.message.edit(view=self)
                 except Exception as e:
                     print(f"메시지 수정 중 오류: {e}")
+            
+            # 3초 후 프라이빗 룸 삭제
+            await asyncio.sleep(3)
+            
+            # 프라이빗 룸 삭제
+            try:
+                await self.channel.delete(reason=f"{self.member.name}님이 가이드 서비스를 선택하여 패키지 여행 채널로 이동")
+                print(f"프라이빗 룸 삭제 완료: {self.channel.name}")
+            except discord.NotFound:
+                pass  # 이미 삭제된 경우
+            except Exception as e:
+                print(f"프라이빗 룸 삭제 중 오류: {e}")
                     
         except Exception as e:
             print(f"유지 버튼 처리 중 오류: {e}")
