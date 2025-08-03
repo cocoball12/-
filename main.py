@@ -560,7 +560,6 @@ class FinalButtonView(discord.ui.View):
             
             # 가이드 역할 찾기 
             guide_role = discord.utils.get(guild.roles, name="가이드")
-            if not guide_role:
                
             # 패키지 여행 카테고리 찾기 (없으면 생성)
             package_category = discord.utils.get(guild.categories, name="패키지 여행")
