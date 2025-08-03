@@ -72,9 +72,6 @@ async def on_member_join(member):
         # 서버에서 사용하는 실제 닉네임 가져오기 (display_name 사용)
         member_display_name = member.display_name
         
-        # 이미 해당 멤버의 프라이빗 룸이 존재하는지 확인하기 위한 패턴
-        expected_channel_pattern = f"괄자애정듬뿍-{member_display_name}-{member.id}"
-        
         # 기존 채널 확인
         existing_channel = None
         for channel in guild.text_channels:
@@ -119,11 +116,12 @@ async def on_member_join(member):
                 processing_members.discard(member_key)
                 return
         
-        # 권한 설정
+        # 권한 설정 - 본인과 스튜어디스(관리자)만 볼 수 있도록
         overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
-            stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),  # 모든 사람 차단
+            member: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 본인만 허용
+            stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 스튜어디스(관리자) 허용
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)  # 봇 자신도 허용
         }
         
         # 채널명에 실제 서버 닉네임과 멤버 ID 사용하여 고유성 보장
@@ -201,97 +199,7 @@ class MealButtonView(discord.ui.View):
             item.disabled = True
         
         try:
-            # 마지막 봇 메시지 찾기
-    target_message = None
-    async for message in channel.history(limit=20):
-        if (message.author == bot.user and 
-            message.embeds and 
-            len(message.embeds) > 0 and 
-            "목적지에 도착하셨습니다" in message.embeds[0].title):
-            target_message = message
-            break
-    
-    if not target_message:
-        await interaction.response.send_message("최종 버튼 메시지를 찾을 수 없습니다.", ephemeral=True)
-        return
-    
-    # 새로운 버튼 뷰 생성 및 메시지 수정
-    new_view = FinalButtonView(member, channel)
-    new_view.message = target_message
-    
-    try:
-        await target_message.edit(view=new_view)
-        await interaction.response.send_message("✅ 버튼이 재활성화되었습니다!", ephemeral=True)
-    except Exception as e:
-        await interaction.response.send_message(f"❌ 버튼 재활성화 중 오류가 발생했습니다: {e}", ephemeral=True)
-        print(f"버튼 재활성화 오류: {e}")
-
-# 기존 명령어들 (호환성을 위해)
-@bot.command(name='test')
-async def test_command(ctx):
-    """테스트 명령어 - 봇이 작동하는지 확인"""
-    await ctx.send("✅ 봇이 정상적으로 작동중입니다!")
-
-@bot.command(name='simulate_join')
-async def simulate_join(ctx, member: discord.Member = None):
-    """새 멤버 참가 시뮬레이션 (테스트용)"""
-    if not member:
-        member = ctx.author
-    
-    await ctx.send(f"🔄 {member.mention}님의 참가를 시뮬레이션합니다...")
-    await on_member_join(member)
-
-# 에러 핸들링
-@bot.event
-async def on_error(event, *args, **kwargs):
-    print(f'❌ 에러 발생 - 이벤트: {event}')
-    import traceback
-    traceback.print_exc()
-
-@bot.event
-async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
-        return  # 존재하지 않는 명령어는 무시
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ 필수 인수가 누락되었습니다.")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ 이 명령어를 사용할 권한이 없습니다.")
-    else:
-        print(f'❌ 명령어 에러: {error}')
-        await ctx.send("❌ 명령어 처리 중 오류가 발생했습니다.")
-
-# 봇 및 Flask 서버 실행
-if __name__ == "__main__":
-    # 환경변수에서 토큰 가져오기
-    TOKEN = os.getenv('DISCORD_BOT_TOKEN')
-    
-    if not TOKEN:
-        print("❌ DISCORD_BOT_TOKEN 환경변수를 설정해주세요!")
-        print("💡 .env 파일에 DISCORD_BOT_TOKEN=your_token_here 형식으로 입력하세요.")
-        exit(1)
-    
-    print("🚀 디스코드 프라이빗룸 봇을 시작합니다...")
-    print(f"🐍 Python 버전: {os.sys.version}")
-    
-    # Flask 서버를 별도 스레드에서 실행
-    try:
-        flask_thread = Thread(target=run_flask, daemon=True)
-        flask_thread.start()
-        print("🌐 Flask 서버가 시작되었습니다.")
-    except Exception as e:
-        print(f"⚠️ Flask 서버 시작 실패: {e}")
-    
-    # 디스코드 봇 실행
-    try:
-        bot.run(TOKEN, log_handler=None)  # 기본 로깅 비활성화
-    except discord.LoginFailure:
-        print("❌ 잘못된 봇 토큰입니다! 토큰을 다시 확인해주세요.")
-    except discord.HTTPException as e:
-        print(f"❌ Discord API 오류: {e}")
-    except Exception as e:
-        print(f"❌ 봇 실행 중 예상치 못한 오류 발생: {e}")
-        import traceback
-        traceback.print_exc()메시지를 찾아서 수정
+            # 마지막 봇 메시지를 찾아서 수정
             async for message in self.channel.history(limit=10):
                 if message.author == self.channel.guild.me and message.embeds and len(message.embeds) > 0:
                     if "즐거운 식사시간" in message.embeds[0].title:
@@ -619,4 +527,94 @@ async def reactivate_buttons(interaction: discord.Interaction):
         await interaction.response.send_message("이 채널에 대한 권한이 없습니다.", ephemeral=True)
         return
     
-    # 마지막
+    # 마지막 봇 메시지 찾기
+    target_message = None
+    async for message in channel.history(limit=20):
+        if (message.author == bot.user and 
+            message.embeds and 
+            len(message.embeds) > 0 and 
+            "목적지에 도착하셨습니다" in message.embeds[0].title):
+            target_message = message
+            break
+    
+    if not target_message:
+        await interaction.response.send_message("최종 버튼 메시지를 찾을 수 없습니다.", ephemeral=True)
+        return
+    
+    # 새로운 버튼 뷰 생성 및 메시지 수정
+    new_view = FinalButtonView(member, channel)
+    new_view.message = target_message
+    
+    try:
+        await target_message.edit(view=new_view)
+        await interaction.response.send_message("✅ 버튼이 재활성화되었습니다!", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"❌ 버튼 재활성화 중 오류가 발생했습니다: {e}", ephemeral=True)
+        print(f"버튼 재활성화 오류: {e}")
+
+# 기존 명령어들 (호환성을 위해)
+@bot.command(name='test')
+async def test_command(ctx):
+    """테스트 명령어 - 봇이 작동하는지 확인"""
+    await ctx.send("✅ 봇이 정상적으로 작동중입니다!")
+
+@bot.command(name='simulate_join')
+async def simulate_join(ctx, member: discord.Member = None):
+    """새 멤버 참가 시뮬레이션 (테스트용)"""
+    if not member:
+        member = ctx.author
+    
+    await ctx.send(f"🔄 {member.mention}님의 참가를 시뮬레이션합니다...")
+    await on_member_join(member)
+
+# 에러 핸들링
+@bot.event
+async def on_error(event, *args, **kwargs):
+    print(f'❌ 에러 발생 - 이벤트: {event}')
+    import traceback
+    traceback.print_exc()
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        return  # 존재하지 않는 명령어는 무시
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("❌ 필수 인수가 누락되었습니다.")
+    elif isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ 이 명령어를 사용할 권한이 없습니다.")
+    else:
+        print(f'❌ 명령어 에러: {error}')
+        await ctx.send("❌ 명령어 처리 중 오류가 발생했습니다.")
+
+# 봇 및 Flask 서버 실행
+if __name__ == "__main__":
+    # 환경변수에서 토큰 가져오기
+    TOKEN = os.getenv('DISCORD_BOT_TOKEN')
+    
+    if not TOKEN:
+        print("❌ DISCORD_BOT_TOKEN 환경변수를 설정해주세요!")
+        print("💡 .env 파일에 DISCORD_BOT_TOKEN=your_token_here 형식으로 입력하세요.")
+        exit(1)
+    
+    print("🚀 디스코드 프라이빗룸 봇을 시작합니다...")
+    print(f"🐍 Python 버전: {os.sys.version}")
+    
+    # Flask 서버를 별도 스레드에서 실행
+    try:
+        flask_thread = Thread(target=run_flask, daemon=True)
+        flask_thread.start()
+        print("🌐 Flask 서버가 시작되었습니다.")
+    except Exception as e:
+        print(f"⚠️ Flask 서버 시작 실패: {e}")
+    
+    # 디스코드 봇 실행
+    try:
+        bot.run(TOKEN, log_handler=None)  # 기본 로깅 비활성화
+    except discord.LoginFailure:
+        print("❌ 잘못된 봇 토큰입니다! 토큰을 다시 확인해주세요.")
+    except discord.HTTPException as e:
+        print(f"❌ Discord API 오류: {e}")
+    except Exception as e:
+        print(f"❌ 봇 실행 중 예상치 못한 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
