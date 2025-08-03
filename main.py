@@ -166,13 +166,13 @@ async def on_member_join(member):
     processing_members.add(member_key)
     
     try:
-        # 처음 입장인지 재입장인지 확인
+        # 처음 입장인지 재입장인지 확인 (데이터 저장 전에 확인)
         is_first = is_first_join(guild.id, member.id)
         join_status = "첫입장" if is_first else "재입장"
         
         print(f"새 멤버 참가: {member.name} (ID: {member.id}) - {join_status}")
         
-        # 입장 기록 저장
+        # 입장 기록 저장 (확인 후에 저장)
         save_user_join(guild.id, member.id)
         
         # 서버에서 사용하는 실제 닉네임 가져오기 (display_name 사용)
