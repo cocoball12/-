@@ -178,14 +178,19 @@ async def on_member_join(member):
         # 서버에서 사용하는 실제 닉네임 가져오기 (display_name 사용)
         member_display_name = member.display_name
         
-        # 기존 채널 확인
+        # 기존 채널 확인 (중복 생성 방지 강화)
         existing_channel = None
-        for channel in guild.text_channels:
-            if channel.name.startswith(f"프라이빗룸-") and f"-{member_display_name}" in channel.name:
-                # 채널 권한에서 해당 멤버가 있는지 확인
-                overwrites = channel.overwrites
-                if member in overwrites:
-                    existing_channel = channel
+        for category in guild.categories:
+            if category.name == "프라이빗 룸":
+                for channel in category.text_channels:
+                    if (channel.name.startswith(f"프라이빗룸-") and 
+                        (f"-{member_display_name}" in channel.name or f"-{member.name}" in channel.name)):
+                        # 채널 권한에서 해당 멤버가 있는지 확인
+                        overwrites = channel.overwrites
+                        if member in overwrites:
+                            existing_channel = channel
+                            break
+                if existing_channel:
                     break
         
         if existing_channel:
@@ -195,11 +200,9 @@ async def on_member_join(member):
         
         # 스튜어디스 역할 찾기 
         stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
-     
         
         # 스카이호스트 역할 찾기 
         skyhost_role = discord.utils.get(guild.roles, name="스카이호스트")
-    
         
         # 프라이빗 룸 카테고리 찾기 (없으면 생성)
         category = discord.utils.get(guild.categories, name="프라이빗 룸")
@@ -253,36 +256,27 @@ async def on_member_join(member):
         join_status_emoji = "🎉" if is_first else "🔄"
         join_status_text = "처음 오신 것을 환영합니다!" if is_first else "다시 오신 것을 환영합니다!"
         
-        # 사용자 데이터 가져오기
-        user_key = f"{guild.id}_{member.id}"
-        user_info = user_data.get(user_key, {'join_count': 1})
+        # 첫 번째 안내문 (일반 메시지로 변경)
+        message1 = f"**프라이빗룸 {join_status_emoji}**\n\n"
+        message1 += f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
+        message1 += f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
+        message1 += f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
+        message1 += f"-# 좌석 등급 하향은 서버 추방입니다"
         
-        # 첫 번째 안내문
-        embed1 = discord.Embed(
-            title=f"프라이빗룸 {join_status_emoji}",
-            description=f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
-                       f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
-                       f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
-                       f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
-        )
-        
-        await private_channel.send(embed=embed1)
+        await private_channel.send(message1)
         print(f"첫 번째 안내문 전송 완료")
         
         # 10초 후 두 번째 안내문과 버튼
         await asyncio.sleep(10)
         
-        embed2 = discord.Embed(
-            title="** 즐거운 식사시간~!**",
-            description="**## 서버는 입맛에 맞으신가요?**\n\n"
-                       "서버가 입맛에 맞으시다면 **🍚한식** 버튼을\n"
-                       "서버가 입맛에 맞지 않으시다면 **🆘승무원** 버튼을 눌러주세요\n\n"
-                       "-# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!",
-            color=discord.Color.green()
-        )
+        message2 = "**즐거운 식사시간~!**\n\n"
+        message2 += "**## 서버는 입맛에 맞으신가요?**\n\n"
+        message2 += "서버가 입맛에 맞으시다면 **🍚한식** 버튼을\n"
+        message2 += "서버가 입맛에 맞지 않으시다면 **🆘승무원** 버튼을 눌러주세요\n\n"
+        message2 += "-# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!"
         
         view = MealButtonView(member, stewardess_role, private_channel, is_first)
-        await private_channel.send(embed=embed2, view=view)
+        await private_channel.send(message2, view=view)
         print(f"두 번째 안내문과 버튼 전송 완료")
         
     except Exception as e:
@@ -311,10 +305,9 @@ class MealButtonView(discord.ui.View):
         try:
             # 마지막 봇 메시지를 찾아서 수정
             async for message in self.channel.history(limit=10):
-                if message.author == self.channel.guild.me and message.embeds and len(message.embeds) > 0:
-                    if "즐거운 식사시간" in message.embeds[0].title:
-                        await message.edit(view=self)
-                        break
+                if message.author == self.channel.guild.me and message.view:
+                    await message.edit(view=self)
+                    break
         except Exception as e:
             print(f"타임아웃 처리 중 오류: {e}")
 
@@ -355,15 +348,12 @@ class MealButtonView(discord.ui.View):
         
         welcome_text = "서버 적응에 탁월한 당신" if self.is_first_join else "서버에 다시 오신 당신"
         
-        embed = discord.Embed(
-            description=f"{welcome_text} # 공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
-                       "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
-                       "-# 마일리지는 추후 상품으로 교환 가능합니다.\n\n"
-                       "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 해주세요.",
-            color=discord.Color.blue()
-        )
+        response_message = f"{welcome_text} # 공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
+        response_message += "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
+        response_message += "-# 마일리지는 추후 상품으로 교환 가능합니다.\n\n"
+        response_message += "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 해주세요."
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(response_message)
         
         # 버튼 비활성화
         for item in self.children:
@@ -391,18 +381,13 @@ class MealButtonView(discord.ui.View):
         
         current_nick = self.member.display_name
         new_nick = current_nick
-        gender_info = ""
         
         # 이미 (애플) 또는 (피치)가 있는지 확인
         if not (current_nick.startswith("(애플)") or current_nick.startswith("(피치)")):
             if male_role in self.member.roles:
                 new_nick = f"(애플) {current_nick}"
-                gender_info = "✅  **(애플)**이 추가되었습니다!"
             elif female_role in self.member.roles:
                 new_nick = f"(피치) {current_nick}"
-                gender_info = "✅  **(피치)**가 추가되었습니다!"
-            else:
-                gender_info = "⚠️ 남자 또는 여자 역할이 없어 닉네임이 변경되지 않았습니다."
             
             # 닉네임 변경 시도
             if new_nick != current_nick:
@@ -410,30 +395,24 @@ class MealButtonView(discord.ui.View):
                     await self.member.edit(nick=new_nick, reason="승무원 버튼 선택으로 인한 닉네임 변경")
                     print(f"{self.member.name}님의 닉네임을 {new_nick}으로 변경")
                 except discord.Forbidden:
-                    gender_info = "⚠️ 닉네임 변경 권한이 없습니다."
+                    print("닉네임 변경 권한이 없습니다.")
                 except discord.HTTPException:
-                    gender_info = "⚠️ 닉네임 변경 중 오류가 발생했습니다."
-        else:
-            gender_info = "ℹ️ 이미 성별 표시가 있는 닉네임입니다."
+                    print("닉네임 변경 중 오류가 발생했습니다.")
         
-        embed = discord.Embed(
-            description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
-                       f"{gender_info}\n\n"
-                       "    ⠀⣠⡴⣖⡶⣤⣀⠀  ⠀\n"
-                       "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
-                       "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
-                       "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
-                       "⠀⠀⠀⠓⣄⠙⢂⡨⠌⠀⠀⠀\n"
-                       "⠀⣠⡴⣼⣿⠓⢞⣳⣦⣴⡀⠀\n"
-                       "⢠⢿⣽⣳⢿⡈⢠⣿⢚⣱⣿⠀\n"
-                       "⣸⣟⡶⢯⣻⣆⢼⡯⢯⡷⣯⡇\n"
-                       "⠿⣼⣻⣏⡷⣯⢿⣹⢯⣽⡳⣯\n"
-                       "⠈⠳⣗⡯⡷⠯⠏⢿⣽⡺⠝⠀\n"
-                       "⠀⠀⣯⠿⣵⣚⣤⣞⠷⣯⠀⠀",
-            color=discord.Color.orange()
-        )
+        response_message = f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
+        response_message += "    ⠀⣠⡴⣖⡶⣤⣀⠀  ⠀\n"
+        response_message += "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
+        response_message += "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
+        response_message += "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
+        response_message += "⠀⠀⠀⠓⣄⠙⢂⡨⠌⠀⠀⠀\n"
+        response_message += "⠀⣠⡴⣼⣿⠓⢞⣳⣦⣴⡀⠀\n"
+        response_message += "⢠⢿⣽⣳⢿⡈⢠⣿⢚⣱⣿⠀\n"
+        response_message += "⣸⣟⡶⢯⣻⣆⢼⡯⢯⡷⣯⡇\n"
+        response_message += "⠿⣼⣻⣏⡷⣯⢿⣹⢯⣽⡳⣯\n"
+        response_message += "⠈⠳⣗⡯⡷⠯⠏⢿⣽⡺⠝⠀\n"
+        response_message += "⠀⠀⣯⠿⣵⣚⣤⣞⠷⣯⠀⠀"
         
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(response_message)
         
         # 버튼 비활성화
         for item in self.children:
@@ -451,16 +430,13 @@ class MealButtonView(discord.ui.View):
 
     async def send_final_message(self):
         try:
-            final_embed = discord.Embed(
-                title=" 목적지에 도착하셨습니다!",
-                description="서버에 적응을 하셨다면 **삭제** 버튼을\n\n"
-                           "-# 서버적응에 가이드가 필요하시다면 **유지** 버튼을 눌러주세요! 가이드는 무료입니다!",
-                color=discord.Color.purple()
-            )
+            final_message = "**목적지에 도착하셨습니다!**\n\n"
+            final_message += "서버에 적응을 하셨다면 **삭제** 버튼을\n\n"
+            final_message += "-# 서버적응에 가이드가 필요하시다면 **유지** 버튼을 눌러주세요! 가이드는 무료입니다!"
             
             # 각 메시지마다 새로운 뷰 인스턴스 생성
             final_view = FinalButtonView(self.member, self.channel)
-            message = await self.channel.send(embed=final_embed, view=final_view)
+            message = await self.channel.send(final_message, view=final_view)
             
             # 메시지 ID를 뷰에 저장하여 나중에 수정할 수 있도록 함
             final_view.message = message
@@ -515,15 +491,13 @@ class FinalButtonView(discord.ui.View):
                 try:
                     await self.member.edit(nick=new_nick, reason="프라이빗 룸 삭제 시 성별 표시 제거")
                     print(f"{self.member.name}님의 닉네임에서 성별 표시 제거: {current_nick} -> {new_nick}")
-                    
-                    # 응답 전송 (닉네임 변경 성공)
-                    await interaction.response.send_message("닉네임에서 성별 표시가 제거되었습니다. 프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
+                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
                 except discord.Forbidden:
                     print("닉네임 변경 권한이 없습니다.")
-                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. (닉네임 변경 권한이 없어 성별 표시는 제거되지 않았습니다) 👋")
+                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
                 except discord.HTTPException:
                     print("닉네임 변경 중 오류가 발생했습니다.")
-                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. (닉네임 변경 중 오류 발생) 👋")
+                    await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
             else:
                 # 닉네임에 성별 표시가 없는 경우
                 await interaction.response.send_message("프라이빗 룸이 곧 삭제됩니다. 감사합니다! 👋")
@@ -622,23 +596,20 @@ class FinalButtonView(discord.ui.View):
                     )
                     print(f"패키지 여행 채널 생성 완료: {package_channel.name}")
                     
-                    # 패키지 여행 채널에 환영 메시지 전송
-                    welcome_embed = discord.Embed(
-                        title="🎒 패키지 여행에 오신 것을 환영합니다!",
-                        description=f"**{self.member.mention}님을 위한 개인 가이드 입니다.**\n\n"
-                                   f"이곳은 {self.member.mention}님과 관리자만 볼 수 있는 방입니다.\n\n"
-                                   f"**🎯 가이드 내용:**\n"
-                                   f"• 서버 규칙 및 이용 방법 안내\n"
-                                   f"• 각종 채널 소개 및 활용법\n"
-                                   f"• 서버 내 활동 가이드\n"
-                                   f"• 애플 피치 제거하는 법\n"
-                                   f"• 코인 활용법\n"
-                                   f"• 기타 궁금한 사항 \n"
-                                   f"언제든지 편하게 질문해주세요! 😊",
-                        color=discord.Color.green()
-                    )
+                    # 패키지 여행 채널에 환영 메시지 전송 (일반 메시지로 변경)
+                    welcome_message = "**🎒 패키지 여행에 오신 것을 환영합니다!**\n\n"
+                    welcome_message += f"**{self.member.mention}님을 위한 개인 가이드 입니다.**\n\n"
+                    welcome_message += f"이곳은 {self.member.mention}님과 관리자만 볼 수 있는 방입니다.\n\n"
+                    welcome_message += f"**🎯 가이드 내용:**\n"
+                    welcome_message += f"• 서버 규칙 및 이용 방법 안내\n"
+                    welcome_message += f"• 각종 채널 소개 및 활용법\n"
+                    welcome_message += f"• 서버 내 활동 가이드\n"
+                    welcome_message += f"• 애플 피치 제거하는 법\n"
+                    welcome_message += f"• 코인 활용법\n"
+                    welcome_message += f"• 기타 궁금한 사항 \n"
+                    welcome_message += f"언제든지 편하게 질문해주세요! 😊"
                     
-                    await package_channel.send(embed=welcome_embed)
+                    await package_channel.send(welcome_message)
                     
                     await interaction.response.send_message(
                         f"✅ 패키지 여행 채널이 생성되었습니다: {package_channel.mention}\n"
@@ -708,21 +679,14 @@ async def user_info_slash(interaction: discord.Interaction, 멤버: discord.Memb
     
     if key in user_data:
         data = user_data[key]
-        embed = discord.Embed(
-            title=f" {멤버.display_name}님의 서버 정보",
-            description=f"**첫 입장**: {data['first_join'][:19].replace('T', ' ')}\n"
-                       f"**총 입장 횟수**: {data['join_count']}회\n"
-                       f"**마지막 입장**: {data['last_join'][:19].replace('T', ' ')}",
-            color=discord.Color.blue()
-        )
+        info_message = f"**{멤버.display_name}님의 서버 정보**\n\n"
+        info_message += f"**첫 입장**: {data['first_join'][:19].replace('T', ' ')}\n"
+        info_message += f"**총 입장 횟수**: {data['join_count']}회\n"
+        info_message += f"**마지막 입장**: {data['last_join'][:19].replace('T', ' ')}"
     else:
-        embed = discord.Embed(
-            title=f" {멤버.display_name}님의 서버 정보",
-            description="아직 입장 기록이 없습니다.",
-            color=discord.Color.gray()
-        )
+        info_message = f"**{멤버.display_name}님의 서버 정보**\n\n아직 입장 기록이 없습니다."
     
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message(info_message, ephemeral=True)
 
 @bot.tree.command(name="중복채널정리", description="중복된 프라이빗 룸을 정리합니다 (관리자 전용)")
 @discord.app_commands.default_permissions(administrator=True)
@@ -793,9 +757,8 @@ async def reactivate_buttons(interaction: discord.Interaction, 멤버: discord.M
     target_message = None
     async for message in channel.history(limit=20):
         if (message.author == bot.user and 
-            message.embeds and 
-            len(message.embeds) > 0 and 
-            "목적지에 도착하셨습니다" in message.embeds[0].title):
+            message.view and
+            "목적지에 도착하셨습니다" in message.content):
             target_message = message
             break
     
