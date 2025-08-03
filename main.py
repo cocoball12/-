@@ -59,7 +59,6 @@ keep_alive_messages = [
     "🔧 자동 유지보수 실행 중",
     "💎 최적 상태로 운영 중"
 ]
-
 def save_user_join(guild_id, user_id):
     """사용자 입장 기록 저장"""
     key = f"{guild_id}_{user_id}"
