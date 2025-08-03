@@ -181,7 +181,7 @@ async def on_member_join(member):
         # 기존 채널 확인 (번호 코드 없이 검색)
         existing_channel = None
         for channel in guild.text_channels:
-            if channel.name.startswith(f"괄자애정듬뿍-{member_display_name}") and not channel.name.startswith(f"괄자애정듬뿍-{member_display_name}-"):
+            if channel.name.startswith(f"프라이빗 룸-{member_display_name}") and not channel.name.startswith(f"프라이빗 룸-{member_display_name}-"):
                 # 채널 권한에서 해당 멤버가 있는지 확인
                 overwrites = channel.overwrites
                 if member in overwrites:
@@ -228,7 +228,7 @@ async def on_member_join(member):
             overwrites[skyhost_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         
         # 채널명에 실제 서버 닉네임만 사용 (번호 코드 제거)
-        channel_name = f"괄자애정듬뿍-{member_display_name}"
+        channel_name = f"프라이빗 룸-{member_display_name}"
         # 특수문자 제거 및 길이 제한
         channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))[:100]
         
@@ -259,7 +259,7 @@ async def on_member_join(member):
         
         # 첫 번째 안내문
         embed1 = discord.Embed(
-            title=f"#프라이빗룸 {join_status_emoji}",
+            title=f"프라이빗룸 {join_status_emoji}",
             description=f"**이 대화방은 저희 {stewardess_role.mention} 와 당신만 보이는 프라이빗 룸입니다.**\n\n"
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
@@ -275,7 +275,7 @@ async def on_member_join(member):
         await asyncio.sleep(10)
         
         embed2 = discord.Embed(
-            title="**# 즐거운 식사시간~!**",
+            title="** 즐거운 식사시간~!**",
             description="**## 서버는 입맛에 맞으신가요?**\n\n"
                        "서버가 입맛에 맞으시다면 **한식** 버튼을\n"
                        "서버가 입맛에 맞지 않으시다면 **승무원** 버튼을 눌러주세요\n\n"
@@ -421,7 +421,7 @@ class MealButtonView(discord.ui.View):
         embed = discord.Embed(
             description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
                        f"{gender_info}\n\n"
-                       "⠀  ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
+                       " ⠀  ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
                        "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
                        "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
                        "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
@@ -454,7 +454,7 @@ class MealButtonView(discord.ui.View):
     async def send_final_message(self):
         try:
             final_embed = discord.Embed(
-                title="# 목적지에 도착하셨습니다!",
+                title=" 목적지에 도착하셨습니다!",
                 description="서버에 적응을 하셨다면 **삭제** 버튼을\n\n"
                            "-# 서버적응에 가이드가 필요하시다면 **유지** 버튼을 눌러주세요! 가이드는 무료입니다!",
                 color=discord.Color.purple()
@@ -484,7 +484,7 @@ class FinalButtonView(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if interaction.user != self.member:
-            await interaction.response.send_message("이 버튼은 당신을 위한 것이 아닙니다.", ephemeral=True)
+            await interaction.response.send_message("본인만 선택할 수 있습니다.", ephemeral=True)
             return False
         if self.used:
             await interaction.response.send_message("이미 선택하셨습니다.", ephemeral=True)
