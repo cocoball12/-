@@ -253,6 +253,10 @@ async def on_member_join(member):
         join_status_emoji = "🎉" if is_first else "🔄"
         join_status_text = "처음 오신 것을 환영합니다!" if is_first else "다시 오신 것을 환영합니다!"
         
+        # 사용자 데이터 가져오기
+        user_key = f"{guild.id}_{member.id}"
+        user_info = user_data.get(user_key, {'join_count': 1})
+        
         # 첫 번째 안내문
         embed1 = discord.Embed(
             title=f"#프라이빗룸 {join_status_emoji}",
@@ -260,7 +264,7 @@ async def on_member_join(member):
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
                        f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
-                       f" {join_status} ({user_data[f'{guild.id}_{member.id}'])",
+                       f" {join_status} (총 {user_info['join_count']}회 입장)",
             color=discord.Color.gold()
         )
         
@@ -271,7 +275,7 @@ async def on_member_join(member):
         await asyncio.sleep(10)
         
         embed2 = discord.Embed(
-            title=" # 즐거운 식사시간~!",
+            title="**# 즐거운 식사시간~!**",
             description="**## 서버는 입맛에 맞으신가요?**\n\n"
                        "서버가 입맛에 맞으시다면 **한식** 버튼을\n"
                        "서버가 입맛에 맞지 않으시다면 **승무원** 버튼을 눌러주세요\n\n"
@@ -854,9 +858,6 @@ async def cleanup_package_channels(interaction: discord.Interaction):
                     print(f"패키지 여행 채널 삭제 실패: {channel.name}, 오류: {e}")
     
     await interaction.followup.send(f"✅ {deleted_count}개의 중복 패키지 여행 채널을 정리했습니다.", ephemeral=True)
-
-# 기존 명령어들 제거 (관리자 전용 슬래시 커맨드로 대체)
-# @bot.command 들은 모두 제거하고 슬래시 커맨드만 사용
 
 # 에러 핸들링
 @bot.event
