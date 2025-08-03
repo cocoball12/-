@@ -419,7 +419,7 @@ class MealButtonView(discord.ui.View):
         embed = discord.Embed(
             description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
                        f"{gender_info}\n\n"
-                       "   ⠀  ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
+                         "    ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
                        "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
                        "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
                        "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
@@ -625,16 +625,15 @@ class FinalButtonView(discord.ui.View):
                     # 패키지 여행 채널에 환영 메시지 전송
                     welcome_embed = discord.Embed(
                         title="🎒 패키지 여행에 오신 것을 환영합니다!",
-                        description=f"**{self.member.mention}님을 위한 개인 가이드 서비스입니다.**\n\n"
-                                   f"이곳은 {self.member.mention}님과 관리진만 볼 수 있는 공간입니다.\n"
-                                   f"**접근 가능:** {stewardess_role.mention if stewardess_role else ''}{skyhost_role.mention if skyhost_role else ''}{guide_role.mention if guide_role else ''}\n\n"
-                                   f"**🎯 가이드 서비스 내용:**\n"
+                        description=f"**{self.member.mention}님을 위한 개인 가이드 입니다.**\n\n"
+                                   f"이곳은 {self.member.mention}님과 관리자만 볼 수 있는 방입니다.\n\n"
+                                   f"**🎯 가이드 내용:**\n"
                                    f"• 서버 규칙 및 이용 방법 안내\n"
                                    f"• 각종 채널 소개 및 활용법\n"
                                    f"• 서버 내 활동 가이드\n"
                                    f"• 애플 피치 제거하는 법\n"
                                    f"• 코인 활용법\n"
-                                   f"• 기타 궁금한 사항 문의\n"
+                                   f"• 기타 궁금한 사항 \n"
                                    f"언제든지 편하게 질문해주세요! 😊",
                         color=discord.Color.green()
                     )
