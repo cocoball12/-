@@ -264,8 +264,6 @@ async def on_member_join(member):
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
                        f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
-                       f" {join_status_text} (총 {user_info['join_count']}회 입장)",
-            color=discord.Color.gold()
         )
         
         await private_channel.send(embed=embed1)
@@ -421,7 +419,7 @@ class MealButtonView(discord.ui.View):
         embed = discord.Embed(
             description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
                        f"{gender_info}\n\n"
-                       " ⠀  ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
+                       "   ⠀  ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
                        "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
                        "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
                        "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
