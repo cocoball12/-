@@ -260,7 +260,7 @@ async def on_member_join(member):
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
                        f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
-                       f" **입장 정보**: {join_status} ({user_data[f'{guild.id}_{member.id}']['join_count']}번째 입장)",
+                       f" {join_status} ({user_data[f'{guild.id}_{member.id}'])",
             color=discord.Color.gold()
         )
         
@@ -271,7 +271,7 @@ async def on_member_join(member):
         await asyncio.sleep(10)
         
         embed2 = discord.Embed(
-            title="# 즐거운 식사시간~!",
+            title=" # 즐거운 식사시간~!",
             description="**## 서버는 입맛에 맞으신가요?**\n\n"
                        "서버가 입맛에 맞으시다면 **한식** 버튼을\n"
                        "서버가 입맛에 맞지 않으시다면 **승무원** 버튼을 눌러주세요\n\n"
