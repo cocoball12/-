@@ -92,8 +92,8 @@ async def on_member_remove(member):
         private_category = discord.utils.get(guild.categories, name="프라이빗 룸")
         if private_category:
             for channel in private_category.text_channels:
-                # 채널명이 해당 멤버와 관련된지 확인
-                if (channel.name.startswith(f"괄자애정듬뿍-{member_display_name}") or
+                # 채널명이 해당 멤버와 관련된지 확인 (새로운 형식)
+                if (channel.name.startswith(f"프라이빗룸-") and (f"-{member_display_name}" in channel.name) or
                     member in channel.overwrites):
                     try:
                         await channel.delete(reason=f"{member.name}님이 서버를 나가서 프라이빗 룸 삭제")
@@ -122,7 +122,7 @@ async def on_member_remove(member):
             # 프라이빗 룸에서 멤버 이름으로 검색
             if private_category:
                 for channel in private_category.text_channels:
-                    if channel.name.startswith(f"괄자애정듬뿍-{member_name}"):
+                    if channel.name.startswith(f"프라이빗룸-") and f"-{member_name}" in channel.name:
                         try:
                             await channel.delete(reason=f"{member.name}님이 서버를 나가서 프라이빗 룸 삭제")
                             deleted_channels.append(f"프라이빗 룸: {channel.name}")
@@ -168,7 +168,7 @@ async def on_member_join(member):
     try:
         # 처음 입장인지 재입장인지 확인
         is_first = is_first_join(guild.id, member.id)
-        join_status = "첫 입장" if is_first else "재입장"
+        join_status = "첫입장" if is_first else "재입장"
         
         print(f"새 멤버 참가: {member.name} (ID: {member.id}) - {join_status}")
         
@@ -178,10 +178,10 @@ async def on_member_join(member):
         # 서버에서 사용하는 실제 닉네임 가져오기 (display_name 사용)
         member_display_name = member.display_name
         
-        # 기존 채널 확인 (번호 코드 없이 검색)
+        # 기존 채널 확인
         existing_channel = None
         for channel in guild.text_channels:
-            if channel.name.startswith(f"프라이빗 룸-{member_display_name}") and not channel.name.startswith(f"프라이빗 룸-{member_display_name}-"):
+            if channel.name.startswith(f"프라이빗룸-") and f"-{member_display_name}" in channel.name:
                 # 채널 권한에서 해당 멤버가 있는지 확인
                 overwrites = channel.overwrites
                 if member in overwrites:
@@ -227,8 +227,8 @@ async def on_member_join(member):
         if skyhost_role:
             overwrites[skyhost_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         
-        # 채널명에 실제 서버 닉네임만 사용 (번호 코드 제거)
-        channel_name = f"프라이빗 룸-{member_display_name}"
+        # 새로운 채널명 형식: 프라이빗룸-(첫입장/재입장)-서버닉네임
+        channel_name = f"프라이빗룸-{join_status}-{member_display_name}"
         # 특수문자 제거 및 길이 제한
         channel_name = "".join(c for c in channel_name if c.isalnum() or c in ("-", "_"))[:100]
         
@@ -264,7 +264,7 @@ async def on_member_join(member):
                        f"-# 관리자랑 {member.mention}고객님만 보여요!\n\n"
                        f"단 {stewardess_role.mention}의 부름에 대답이 없으실 경우 좌석등급이 하향될수있습니다\n\n"
                        f"-# 좌석 등급 하향은 서버 추방입니다\n\n"
-                       f" {join_status} (총 {user_info['join_count']}회 입장)",
+                       f" {join_status_text} (총 {user_info['join_count']}회 입장)",
             color=discord.Color.gold()
         )
         
@@ -690,7 +690,7 @@ class FinalButtonView(discord.ui.View):
 async def test_slash(interaction: discord.Interaction):
     await interaction.response.send_message("✅ 봇이 정상적으로 작동중입니다!", ephemeral=True)
 
-@bot.tree.command(name="참가시뮬레이션", description="새 멤버 참가를 시뮬레이션합니다 (관리자 전용)")
+@bot.tree.command(name="참가시뮬레이션", description="새 멤버 참가를 시뮬레이션합니다 (관리자 전용)")  
 @discord.app_commands.default_permissions(administrator=True)
 async def simulate_join_slash(interaction: discord.Interaction, 멤버: discord.Member = None):
     if not 멤버:
@@ -739,14 +739,14 @@ async def cleanup_duplicate_channels(interaction: discord.Interaction):
         await interaction.followup.send("프라이빗 룸 카테고리를 찾을 수 없습니다.", ephemeral=True)
         return
     
-    # 채널별로 그룹화 (번호 코드 제거된 새로운 형식 기준)
+    # 채널별로 그룹화 (새로운 형식 기준)
     channel_groups = {}
     for channel in category.text_channels:
-        if channel.name.startswith("괄자애정듬뿍"):
+        if channel.name.startswith("프라이빗룸-"):
             # 기본 이름으로 그룹화 (닉네임 부분만)
             parts = channel.name.split("-")
-            if len(parts) >= 2:
-                base_name = f"{parts[0]}-{parts[1]}"  # 괄자애정듬뿍-닉네임
+            if len(parts) >= 3:
+                base_name = f"{parts[0]}-{parts[2]}"  # 프라이빗룸-닉네임
             else:
                 base_name = channel.name
             
@@ -775,8 +775,8 @@ async def cleanup_duplicate_channels(interaction: discord.Interaction):
 async def reactivate_buttons(interaction: discord.Interaction, 멤버: discord.Member = None):
     channel = interaction.channel
     
-    # 채널 이름이 프라이빗 룸인지 확인
-    if not channel.name.startswith("괄자애정듬뿍"):
+    # 채널 이름이 프라이빗 룸인지 확인 (새로운 형식)
+    if not channel.name.startswith("프라이빗룸-"):
         await interaction.response.send_message("이 명령어는 프라이빗 룸에서만 사용할 수 있습니다.", ephemeral=True)
         return
     
