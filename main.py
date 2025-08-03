@@ -490,7 +490,7 @@ class MealButtonView(discord.ui.View):
             final_message = "**목적지에 도착하셨습니다!**\n\n"
             final_message += "서버에 완벽 적응을 하셨다면 자유여행 버튼🧍을\n\n"
             final_message += "서버적응에 도움이 필요하시다면 패키지 여행버튼👫을 눌러주세요!"
-            final_message += " -# 단 가이드는 무료로 제공해드립니다.
+            final_message += "-# 단 가이드는 무료로 제공해드립니다.
             # 각 메시지마다 새로운 뷰 인스턴스 생성
             final_view = FinalButtonView(self.member, self.channel)
             message = await self.channel.send(final_message, view=final_view)
