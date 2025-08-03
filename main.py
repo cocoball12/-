@@ -478,17 +478,99 @@ class FinalButtonView(discord.ui.View):
         try:
             self.used = True  # 버튼 사용됨 표시
             
-            embed = discord.Embed(
-                title="🎉 가이드 서비스",
-                description="프라이빗 룸이 유지됩니다!\n언제든지 스튜어디스에게 문의하세요! 😊",
-                color=discord.Color.green()
-            )
+            guild = interaction.guild
+            
+            # 스튜어디스 역할 찾기
+            stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
+            
+            # 패키지 여행 카테고리 찾기 (없으면 생성)
+            package_category = discord.utils.get(guild.categories, name="패키지 여행")
+            if not package_category:
+                try:
+                    package_category = await guild.create_category(
+                        "패키지 여행",
+                        reason="패키지 여행 시스템용 카테고리 생성"
+                    )
+                    print(f"패키지 여행 카테고리 생성 완료")
+                except discord.Forbidden:
+                    await interaction.response.send_message("❌ 카테고리 생성 권한이 없습니다!")
+                    return
+            
+            # 기존 패키지 여행 채널 확인
+            existing_package_channel = None
+            member_display_name = self.member.display_name
+            for channel in package_category.text_channels:
+                if channel.name.startswith(f"패키지여행-{member_display_name}"):
+                    # 채널 권한에서 해당 멤버가 있는지 확인
+                    overwrites = channel.overwrites
+                    if self.member in overwrites:
+                        existing_package_channel = channel
+                        break
+            
+            if existing_package_channel:
+                await interaction.response.send_message(
+                    f"✅ 이미 패키지 여행 채널이 존재합니다: {existing_package_channel.mention}\n"
+                    f"프라이빗 룸이 유지됩니다!",
+                    ephemeral=False
+                )
+            else:
+                # 패키지 여행 채널 생성
+                overwrites = {
+                    guild.default_role: discord.PermissionOverwrite(read_messages=False),  # 모든 사람 차단
+                    self.member: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 본인만 허용
+                    guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)  # 봇 자신도 허용
+                }
+                
+                # 스튜어디스 역할이 있으면 권한 추가
+                if stewardess_role:
+                    overwrites[stewardess_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                
+                # 채널명 생성
+                package_channel_name = f"패키지여행-{member_display_name}"
+                # 특수문자 제거 및 길이 제한
+                package_channel_name = "".join(c for c in package_channel_name if c.isalnum() or c in ("-", "_"))[:100]
+                
+                try:
+                    package_channel = await guild.create_text_channel(
+                        package_channel_name,
+                        category=package_category,
+                        overwrites=overwrites,
+                        reason=f"{self.member.name}님을 위한 패키지 여행 채널 생성"
+                    )
+                    print(f"패키지 여행 채널 생성 완료: {package_channel.name}")
+                    
+                    # 패키지 여행 채널에 환영 메시지 전송
+                    welcome_embed = discord.Embed(
+                        title="🎒 패키지 여행에 오신 것을 환영합니다!",
+                        description=f"**{self.member.mention}님을 위한 개인 가이드 서비스입니다.**\n\n"
+                                   f"이곳은 {self.member.mention}님과 {stewardess_role.mention if stewardess_role else '관리자'}만 볼 수 있는 공간입니다.\n\n"
+                                   f"**🎯 가이드 서비스 내용:**\n"
+                                   f"• 서버 규칙 및 이용 방법 안내\n"
+                                   f"• 각종 채널 소개 및 활용법\n"
+                                   f"• 서버 내 활동 가이드\n"
+                                   f"• 기타 궁금한 사항 문의\n\n"
+                                   f"언제든지 편하게 질문해주세요! 😊",
+                        color=discord.Color.green()
+                    )
+                    
+                    await package_channel.send(embed=welcome_embed)
+                    
+                    await interaction.response.send_message(
+                        f"✅ 패키지 여행 채널이 생성되었습니다: {package_channel.mention}\n"
+                        f"프라이빗 룸이 유지됩니다! 언제든지 가이드 서비스를 이용해주세요! 😊"
+                    )
+                    
+                except discord.Forbidden:
+                    await interaction.response.send_message("❌ 패키지 여행 채널 생성 권한이 없습니다!")
+                    return
+                except Exception as e:
+                    await interaction.response.send_message(f"❌ 패키지 여행 채널 생성 중 오류: {e}")
+                    print(f"패키지 여행 채널 생성 중 오류: {e}")
+                    return
             
             # 버튼 비활성화
             for item in self.children:
                 item.disabled = True
-            
-            await interaction.response.send_message(embed=embed)
             
             # 원본 메시지의 버튼 비활성화
             if self.message:
@@ -502,12 +584,14 @@ class FinalButtonView(discord.ui.View):
             import traceback
             traceback.print_exc()
 
-# 슬래시 커맨드들
-@bot.tree.command(name="테스트", description="봇이 정상 작동하는지 확인합니다")
+# 슬래시 커맨드들 (모두 관리자 전용으로 수정)
+@bot.tree.command(name="테스트", description="봇이 정상 작동하는지 확인합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
 async def test_slash(interaction: discord.Interaction):
     await interaction.response.send_message("✅ 봇이 정상적으로 작동중입니다!", ephemeral=True)
 
-@bot.tree.command(name="참가시뮬레이션", description="새 멤버 참가를 시뮬레이션합니다")
+@bot.tree.command(name="참가시뮬레이션", description="새 멤버 참가를 시뮬레이션합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
 async def simulate_join_slash(interaction: discord.Interaction, 멤버: discord.Member = None):
     if not 멤버:
         멤버 = interaction.user
@@ -515,7 +599,8 @@ async def simulate_join_slash(interaction: discord.Interaction, 멤버: discord.
     await interaction.response.send_message(f"🔄 {멤버.mention}님의 참가를 시뮬레이션합니다...", ephemeral=True)
     await on_member_join(멤버)
 
-@bot.tree.command(name="사용자정보", description="사용자의 입장 정보를 확인합니다")
+@bot.tree.command(name="사용자정보", description="사용자의 입장 정보를 확인합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
 async def user_info_slash(interaction: discord.Interaction, 멤버: discord.Member = None):
     if not 멤버:
         멤버 = interaction.user
@@ -584,21 +669,28 @@ async def cleanup_duplicate_channels(interaction: discord.Interaction):
     
     await interaction.followup.send(f"✅ {deleted_count}개의 중복 채널을 정리했습니다.", ephemeral=True)
 
-# 버튼 재활성화 명령어 추가
-@bot.tree.command(name="버튼재활성화", description="비활성화된 최종 버튼을 재활성화합니다")
-async def reactivate_buttons(interaction: discord.Interaction):
+# 버튼 재활성화 명령어 (관리자 전용으로 수정)
+@bot.tree.command(name="버튼재활성화", description="비활성화된 최종 버튼을 재활성화합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def reactivate_buttons(interaction: discord.Interaction, 멤버: discord.Member = None):
     channel = interaction.channel
-    member = interaction.user
     
     # 채널 이름이 프라이빗 룸인지 확인
     if not channel.name.startswith("괄자애정듬뿍"):
         await interaction.response.send_message("이 명령어는 프라이빗 룸에서만 사용할 수 있습니다.", ephemeral=True)
         return
     
-    # 채널에 해당 멤버 권한이 있는지 확인
-    if member not in channel.overwrites:
-        await interaction.response.send_message("이 채널에 대한 권한이 없습니다.", ephemeral=True)
-        return
+    # 멤버가 지정되지 않았다면 채널 권한에서 찾기
+    if not 멤버:
+        # 채널 권한에서 일반 멤버 찾기 (봇, @everyone, 역할 제외)
+        for user, overwrite in channel.overwrites.items():
+            if isinstance(user, discord.Member) and user != interaction.guild.me:
+                멤버 = user
+                break
+        
+        if not 멤버:
+            await interaction.response.send_message("해당 채널의 소유자를 찾을 수 없습니다. 멤버를 직접 지정해주세요.", ephemeral=True)
+            return
     
     # 마지막 봇 메시지 찾기
     target_message = None
@@ -615,30 +707,60 @@ async def reactivate_buttons(interaction: discord.Interaction):
         return
     
     # 새로운 버튼 뷰 생성 및 메시지 수정
-    new_view = FinalButtonView(member, channel)
+    new_view = FinalButtonView(멤버, channel)
     new_view.message = target_message
     
     try:
         await target_message.edit(view=new_view)
-        await interaction.response.send_message("✅ 버튼이 재활성화되었습니다!", ephemeral=True)
+        await interaction.response.send_message(f"✅ {멤버.mention}님을 위한 버튼이 재활성화되었습니다!", ephemeral=True)
     except Exception as e:
         await interaction.response.send_message(f"❌ 버튼 재활성화 중 오류가 발생했습니다: {e}", ephemeral=True)
         print(f"버튼 재활성화 오류: {e}")
 
-# 기존 명령어들 (호환성을 위해)
-@bot.command(name='test')
-async def test_command(ctx):
-    """테스트 명령어 - 봇이 작동하는지 확인"""
-    await ctx.send("✅ 봇이 정상적으로 작동중입니다!")
-
-@bot.command(name='simulate_join')
-async def simulate_join(ctx, member: discord.Member = None):
-    """새 멤버 참가 시뮬레이션 (테스트용)"""
-    if not member:
-        member = ctx.author
+# 패키지 여행 채널 정리 명령어 추가 (관리자 전용)
+@bot.tree.command(name="패키지여행정리", description="패키지 여행 채널을 정리합니다 (관리자 전용)")
+@discord.app_commands.default_permissions(administrator=True)
+async def cleanup_package_channels(interaction: discord.Interaction):
+    guild = interaction.guild
+    await interaction.response.defer(ephemeral=True)
     
-    await ctx.send(f"🔄 {member.mention}님의 참가를 시뮬레이션합니다...")
-    await on_member_join(member)
+    # 패키지 여행 카테고리 찾기
+    category = discord.utils.get(guild.categories, name="패키지 여행")
+    if not category:
+        await interaction.followup.send("패키지 여행 카테고리를 찾을 수 없습니다.", ephemeral=True)
+        return
+    
+    # 중복 채널 그룹화
+    channel_groups = {}
+    for channel in category.text_channels:
+        if channel.name.startswith("패키지여행"):
+            parts = channel.name.split("-")
+            if len(parts) >= 2:
+                base_name = f"{parts[0]}-{parts[1]}"  # 패키지여행-닉네임
+            else:
+                base_name = channel.name
+            
+            if base_name not in channel_groups:
+                channel_groups[base_name] = []
+            channel_groups[base_name].append(channel)
+    
+    deleted_count = 0
+    for base_name, channels in channel_groups.items():
+        if len(channels) > 1:
+            # 가장 오래된 채널을 제외하고 나머지 삭제
+            channels.sort(key=lambda x: x.created_at)
+            for channel in channels[1:]:
+                try:
+                    await channel.delete(reason="중복 패키지 여행 채널 정리")
+                    deleted_count += 1
+                    print(f"중복 패키지 여행 채널 삭제: {channel.name}")
+                except Exception as e:
+                    print(f"패키지 여행 채널 삭제 실패: {channel.name}, 오류: {e}")
+    
+    await interaction.followup.send(f"✅ {deleted_count}개의 중복 패키지 여행 채널을 정리했습니다.", ephemeral=True)
+
+# 기존 명령어들 제거 (관리자 전용 슬래시 커맨드로 대체)
+# @bot.command 들은 모두 제거하고 슬래시 커맨드만 사용
 
 # 에러 핸들링
 @bot.event
