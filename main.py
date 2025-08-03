@@ -420,24 +420,37 @@ class MealButtonView(discord.ui.View):
         current_nick = self.member.display_name
         new_nick = current_nick
         
+        print(f"승무원 버튼 클릭 - 현재 닉네임: {current_nick}")
+        print(f"멤버 역할: {[role.name for role in self.member.roles]}")
+        
         # 이미 (애플) 또는 (피치)가 있는지 확인
         if not (current_nick.startswith("(애플)") or current_nick.startswith("(피치)")):
-            if male_role in self.member.roles:
+            if male_role and male_role in self.member.roles:
                 new_nick = f"(애플) {current_nick}"
-            elif female_role in self.member.roles:
+                print(f"남자 역할 감지 - 새 닉네임: {new_nick}")
+            elif female_role and female_role in self.member.roles:
                 new_nick = f"(피치) {current_nick}"
+                print(f"여자 역할 감지 - 새 닉네임: {new_nick}")
+            else:
+                print(f"성별 역할을 찾을 수 없음. 남자 역할: {male_role}, 여자 역할: {female_role}")
             
             # 닉네임 변경 시도
             if new_nick != current_nick:
                 try:
                     await self.member.edit(nick=new_nick, reason="승무원 버튼 선택으로 인한 닉네임 변경")
-                    print(f"{self.member.name}님의 닉네임을 {new_nick}으로 변경")
+                    print(f"닉네임 변경 성공: {current_nick} -> {new_nick}")
                 except discord.Forbidden:
                     print("닉네임 변경 권한이 없습니다.")
-                except discord.HTTPException:
-                    print("닉네임 변경 중 오류가 발생했습니다.")
+                except discord.HTTPException as e:
+                    print(f"닉네임 변경 중 HTTP 오류: {e}")
+                except Exception as e:
+                    print(f"닉네임 변경 중 예상치 못한 오류: {e}")
+            else:
+                print("닉네임 변경이 필요하지 않습니다.")
+        else:
+            print("이미 성별 표시가 있는 닉네임입니다.")
         
-        response_message = f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
+        response_message = f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**🍳\n\n"
         response_message += "    ⠀⣠⡴⣖⡶⣤⣀⠀  ⠀\n"
         response_message += "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
         response_message += "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
@@ -469,8 +482,9 @@ class MealButtonView(discord.ui.View):
     async def send_final_message(self):
         try:
             final_message = "**목적지에 도착하셨습니다!**\n\n"
-            final_message += "서버에 적응을 하셨다면 **삭제** 버튼을\n\n"
-            final_message += "-# 서버적응에 가이드가 필요하시다면 **유지** 버튼을 눌러주세요! 가이드는 무료입니다!"
+            final_message += "서버에 완벽 적응을 하셨다면 자유여행 버튼🧍을\n\n"
+            final_message += "-# 서버적응에 도움이 필요하시다면 패키지 여행버튼👫을 눌러주세요!\n"
+            final_message += "단 가이드는 무료로 제공해드립니다."
             
             # 각 메시지마다 새로운 뷰 인스턴스 생성
             final_view = FinalButtonView(self.member, self.channel)
@@ -503,7 +517,7 @@ class FinalButtonView(discord.ui.View):
             return False
         return True
 
-    @discord.ui.button(label='삭제', style=discord.ButtonStyle.danger, emoji='🗑️')
+    @discord.ui.button(label='자유여행', style=discord.ButtonStyle.danger, emoji='🧍')
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             self.used = True  # 버튼 사용됨 표시
@@ -559,7 +573,7 @@ class FinalButtonView(discord.ui.View):
             import traceback
             traceback.print_exc()
 
-    @discord.ui.button(label='유지', style=discord.ButtonStyle.success, emoji='💚')
+    @discord.ui.button(label='패키지 여행', style=discord.ButtonStyle.success, emoji='👫')
     async def keep_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         try:
             self.used = True  # 버튼 사용됨 표시
