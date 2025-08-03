@@ -314,10 +314,10 @@ async def on_member_join(member):
         await asyncio.sleep(10)
         
         message2 = "**즐거운 식사시간~!**\n\n"
-        message2 += "**## 서버는 입맛에 맞으신가요?**\n\n"
+        message2 += "**## 서버는 입맛에 맞으신가요?**\n"
         message2 += "서버가 입맛에 맞으시다면 **🍚한식** 버튼을\n"
         message2 += "서버가 입맛에 맞지 않으시다면 **🆘승무원** 버튼을 눌러주세요\n\n"
-        message2 += "-# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!"
+        message2 += " -# 승무원 버튼을 누르시면 고객님을 위한 특별 기내식을 준비해드리겠습니다!"
         
         view = MealButtonView(member, stewardess_role, private_channel, is_first)
         await private_channel.send(message2, view=view)
@@ -488,8 +488,8 @@ class MealButtonView(discord.ui.View):
     async def send_final_message(self):
         try:
             final_message = "**목적지에 도착하셨습니다!**\n\n"
-            final_message += "서버에 완벽 적응을 하셨다면 자유여행 버튼🧍을\n\n"
-            final_message += "서버적응에 도움이 필요하시다면 패키지 여행버튼👫을 눌러주세요!"
+            final_message += "서버에 완벽 적응을 하셨다면 자유여행 버튼🧍을\n"
+            final_message += "서버적응에 도움이 필요하시다면 패키지 여행버튼👫을 눌러주세요!\n"
             final_message += "-# 단 가이드는 무료로 제공해드립니다."
             # 각 메시지마다 새로운 뷰 인스턴스 생성
             final_view = FinalButtonView(self.member, self.channel)
