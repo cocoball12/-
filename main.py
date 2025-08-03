@@ -208,6 +208,19 @@ async def on_member_join(member):
                 processing_members.discard(member_key)
                 return
         
+        # 스카이호스트 역할 찾기 (없으면 생성)
+        skyhost_role = discord.utils.get(guild.roles, name="스카이호스트")
+        if not skyhost_role:
+            try:
+                skyhost_role = await guild.create_role(
+                    name="스카이호스트", 
+                    color=discord.Color.purple(),
+                    reason="프라이빗 룸 시스템용 역할 생성"
+                )
+                print(f"스카이호스트 역할 생성 완료")
+            except discord.Forbidden:
+                print("스카이호스트 역할 생성 권한이 없습니다!")
+        
         # 프라이빗 룸 카테고리 찾기 (없으면 생성)
         category = discord.utils.get(guild.categories, name="프라이빗 룸")
         if not category:
@@ -222,13 +235,17 @@ async def on_member_join(member):
                 processing_members.discard(member_key)
                 return
         
-        # 권한 설정 - 본인과 스튜어디스(관리자)만 볼 수 있도록
+        # 권한 설정 - 본인, 스카이호스트, 스튜어디스만 볼 수 있도록
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),  # 모든 사람 차단
             member: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 본인만 허용
-            stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 스튜어디스(관리자) 허용
+            stewardess_role: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 스튜어디스 허용
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)  # 봇 자신도 허용
         }
+        
+        # 스카이호스트 역할이 있으면 권한 추가
+        if skyhost_role:
+            overwrites[skyhost_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
         
         # 채널명에 실제 서버 닉네임만 사용 (번호 코드 제거)
         channel_name = f"괄자애정듬뿍-{member_display_name}"
@@ -362,18 +379,7 @@ class MealButtonView(discord.ui.View):
             description=f"{welcome_text} #공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
                        "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
                        "-# 마일리지는 추후 상품으로 교환 가능합니다.\n\n"
-                       "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 하면 공항 채널이 자동 삭제 됩니다.\n\n"
-                       "⠀⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
-                       "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
-                       "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
-                       "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
-                       "⠀⠀⠀⠓⣄⠙⢂⡨⠌⠀⠀⠀\n"
-                       "⠀⣠⡴⣼⣿⠓⢞⣳⣦⣴⡀⠀\n"
-                       "⢠⢿⣽⣳⢿⡈⢠⣿⢚⣱⣿⠀\n"
-                       "⣸⣟⡶⢯⣻⣆⢼⡯⢯⡷⣯⡇\n"
-                       "⠿⣼⣻⣏⡷⣯⢿⣹⢯⣽⡳⣯\n"
-                       "⠈⠳⣗⡯⡷⠯⠏⢿⣽⡺⠝⠀\n"
-                       "⠀⠀⣯⠿⣵⣚⣤⣞⠷⣯⠀⠀",
+                       "**아직 서버 적응이 더 필요해서** #공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인을 멘션하시고 #공항 채널을 안보이게 해달라고 하면 공항 채널이 자동 삭제 됩니다.",
             color=discord.Color.blue()
         )
         
@@ -432,7 +438,18 @@ class MealButtonView(discord.ui.View):
         
         embed = discord.Embed(
             description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
-                       f"{gender_info}",
+                       f"{gender_info}\n\n"
+                       "⠀⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
+                       "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
+                       "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
+                       "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
+                       "⠀⠀⠀⠓⣄⠙⢂⡨⠌⠀⠀⠀\n"
+                       "⠀⣠⡴⣼⣿⠓⢞⣳⣦⣴⡀⠀\n"
+                       "⢠⢿⣽⣳⢿⡈⢠⣿⢚⣱⣿⠀\n"
+                       "⣸⣟⡶⢯⣻⣆⢼⡯⢯⡷⣯⡇\n"
+                       "⠿⣼⣻⣏⡷⣯⢿⣹⢯⣽⡳⣯\n"
+                       "⠈⠳⣗⡯⡷⠯⠏⢿⣽⡺⠝⠀\n"
+                       "⠀⠀⣯⠿⣵⣚⣤⣞⠷⣯⠀⠀",
             color=discord.Color.orange()
         )
         
@@ -504,14 +521,17 @@ class FinalButtonView(discord.ui.View):
             # 닉네임에서 (피치), (애플) 제거
             current_nick = self.member.display_name
             new_nick = current_nick
+            nick_changed = False
             
             if current_nick.startswith("(피치) "):
                 new_nick = current_nick[4:]  # "(피치) " 제거 (4글자)
+                nick_changed = True
             elif current_nick.startswith("(애플) "):
                 new_nick = current_nick[4:]  # "(애플) " 제거 (4글자)
+                nick_changed = True
             
             # 닉네임 변경 시도
-            if new_nick != current_nick:
+            if nick_changed:
                 try:
                     await self.member.edit(nick=new_nick, reason="프라이빗 룸 삭제 시 성별 표시 제거")
                     print(f"{self.member.name}님의 닉네임에서 성별 표시 제거: {current_nick} -> {new_nick}")
@@ -557,6 +577,22 @@ class FinalButtonView(discord.ui.View):
             # 스튜어디스 역할 찾기
             stewardess_role = discord.utils.get(guild.roles, name="스튜어디스")
             
+            # 스카이호스트 역할 찾기
+            skyhost_role = discord.utils.get(guild.roles, name="스카이호스트")
+            
+            # 가이드 역할 찾기 (없으면 생성)
+            guide_role = discord.utils.get(guild.roles, name="가이드")
+            if not guide_role:
+                try:
+                    guide_role = await guild.create_role(
+                        name="가이드", 
+                        color=discord.Color.orange(),
+                        reason="패키지 여행 시스템용 역할 생성"
+                    )
+                    print(f"가이드 역할 생성 완료")
+                except discord.Forbidden:
+                    print("가이드 역할 생성 권한이 없습니다!")
+            
             # 패키지 여행 카테고리 찾기 (없으면 생성)
             package_category = discord.utils.get(guild.categories, name="패키지 여행")
             if not package_category:
@@ -587,16 +623,20 @@ class FinalButtonView(discord.ui.View):
                     f"프라이빗 룸이 곧 삭제됩니다. 패키지 여행 채널을 이용해주세요! 👋"
                 )
             else:
-                # 패키지 여행 채널 생성
+                # 패키지 여행 채널 생성 - 본인, 스카이호스트, 가이드, 스튜어디스만 볼 수 있도록
                 overwrites = {
                     guild.default_role: discord.PermissionOverwrite(read_messages=False),  # 모든 사람 차단
                     self.member: discord.PermissionOverwrite(read_messages=True, send_messages=True),  # 본인만 허용
                     guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)  # 봇 자신도 허용
                 }
                 
-                # 스튜어디스 역할이 있으면 권한 추가
+                # 각 역할이 있으면 권한 추가
                 if stewardess_role:
                     overwrites[stewardess_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                if skyhost_role:
+                    overwrites[skyhost_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+                if guide_role:
+                    overwrites[guide_role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
                 
                 # 채널명 생성
                 package_channel_name = f"패키지여행-{member_display_name}"
@@ -616,7 +656,8 @@ class FinalButtonView(discord.ui.View):
                     welcome_embed = discord.Embed(
                         title="🎒 패키지 여행에 오신 것을 환영합니다!",
                         description=f"**{self.member.mention}님을 위한 개인 가이드 서비스입니다.**\n\n"
-                                   f"이곳은 {self.member.mention}님과 {stewardess_role.mention if stewardess_role else '관리자'}만 볼 수 있는 공간입니다.\n\n"
+                                   f"이곳은 {self.member.mention}님과 관리진만 볼 수 있는 공간입니다.\n"
+                                   f"**접근 가능:** {stewardess_role.mention if stewardess_role else ''}{skyhost_role.mention if skyhost_role else ''}{guide_role.mention if guide_role else ''}\n\n"
                                    f"**🎯 가이드 서비스 내용:**\n"
                                    f"• 서버 규칙 및 이용 방법 안내\n"
                                    f"• 각종 채널 소개 및 활용법\n"
