@@ -439,7 +439,7 @@ class MealButtonView(discord.ui.View):
         embed = discord.Embed(
             description=f"**저희 {self.stewardess_role.mention} 가 고객님의 입맛에 맞는 특별 기내식을 준비중입니다! 기대해주세요**\n🍳\n\n"
                        f"{gender_info}\n\n"
-                       "⠀⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
+                       "⠀  ⣠⡴⣖⡶⣤⣀⠀⠀⠀\n"
                        "⠀⠀⣸⢷⣌⣨⣳⠛⣼⡆⠀⠀\n"
                        "⠀⢠⣿⡙⠞⠃⠡⠂⢸⣇⠀⠀\n"
                        "⠀⠈⡄⠠⠘⢀⡄⠃⢌⠠⠀⠀\n"
