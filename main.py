@@ -382,8 +382,8 @@ async def on_member_join(member):
         await private_channel.send(message1)
         print(f"첫 번째 안내문 전송 완료")
         
-        # 10초 후 두 번째 안내문과 버튼
-        await asyncio.sleep(10)
+        # 1시간 후 두 번째 안내문과 버튼
+        await asyncio.sleep(3600)
         
         message2 = "**즐거운 식사시간~!**\n\n"
         message2 += "**## 서버는 입맛에 맞으신가요?**\n"
@@ -481,8 +481,8 @@ class MealButtonView(discord.ui.View):
         except:
             pass
         
-        # 15초 후 최종 버튼 보내기
-        await asyncio.sleep(15)
+        # 24시간 후 최종 버튼 보내기
+        await asyncio.sleep(86400)
         await self.send_final_message()
 
     @discord.ui.button(label='승무원', style=discord.ButtonStyle.secondary, emoji='🆘')
