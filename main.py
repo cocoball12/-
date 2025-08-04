@@ -59,6 +59,7 @@ keep_alive_messages = [
     "🔧 자동 유지보수 실행 중",
     "💎 최적 상태로 운영 중"
 ]
+
 def save_user_join(guild_id, user_id):
     """사용자 입장 기록 저장"""
     key = f"{guild_id}_{user_id}"
@@ -79,43 +80,80 @@ def is_first_join(guild_id, user_id):
     key = f"{guild_id}_{user_id}"
     return key not in user_data
 
-# Keep-alive 작업 (3분마다 실행)
+# Keep-alive 작업 (3분마다 실행) - 에러 처리 강화
 @tasks.loop(minutes=3)
 async def keep_alive_task():
     try:
+        print(f"🔄 Keep-alive 작업 실행 시작 - {datetime.now().strftime('%H:%M:%S')}")
+        
+        if not keep_alive_channels:
+            print("⚠️ Keep-alive 채널이 설정되지 않았습니다.")
+            return
+            
         for guild_id, channel_id in keep_alive_channels.items():
-            guild = bot.get_guild(guild_id)
-            if guild:
-                channel = guild.get_channel(channel_id)
-                if channel:
-                    # 랜덤 메시지 선택
-                    message = random.choice(keep_alive_messages)
-                    current_time = datetime.now().strftime("%H:%M:%S")
-                    full_message = f"{message} | {current_time}"
+            try:
+                guild = bot.get_guild(guild_id)
+                if not guild:
+                    print(f"⚠️ 길드를 찾을 수 없음: {guild_id}")
+                    continue
                     
-                    try:
-                        # 이전 메시지 삭제 (최대 5개까지만 유지)
-                        messages = []
-                        async for msg in channel.history(limit=10):
-                            if msg.author == bot.user:
-                                messages.append(msg)
-                        
-                        # 5개를 초과하면 오래된 메시지 삭제
-                        if len(messages) >= 5:
-                            for msg in messages[4:]:  # 4번째 이후 메시지들 삭제
-                                try:
-                                    await msg.delete()
-                                except:
-                                    pass
-                        
-                        await channel.send(full_message)
-                        print(f"Keep-alive 메시지 전송: {guild.name} - {full_message}")
-                    except Exception as e:
-                        print(f"Keep-alive 메시지 전송 실패 ({guild.name}): {e}")
-                else:
-                    print(f"Keep-alive 채널을 찾을 수 없음: {guild.name}")
+                channel = guild.get_channel(channel_id)
+                if not channel:
+                    print(f"⚠️ Keep-alive 채널을 찾을 수 없음: {guild.name} (ID: {channel_id})")
+                    continue
+                
+                # 랜덤 메시지 선택
+                message = random.choice(keep_alive_messages)
+                current_time = datetime.now().strftime("%H:%M:%S")
+                full_message = f"{message} | {current_time}"
+                
+                # 이전 메시지 삭제 (최대 5개까지만 유지)
+                try:
+                    messages = []
+                    async for msg in channel.history(limit=10):
+                        if msg.author == bot.user:
+                            messages.append(msg)
+                    
+                    # 5개를 초과하면 오래된 메시지 삭제
+                    if len(messages) >= 5:
+                        for msg in messages[4:]:  # 4번째 이후 메시지들 삭제
+                            try:
+                                await msg.delete()
+                            except Exception as delete_error:
+                                print(f"⚠️ 메시지 삭제 실패: {delete_error}")
+                    
+                    await channel.send(full_message)
+                    print(f"✅ Keep-alive 메시지 전송: {guild.name} - {full_message}")
+                    
+                except Exception as send_error:
+                    print(f"❌ Keep-alive 메시지 전송 실패 ({guild.name}): {send_error}")
+                    
+            except Exception as guild_error:
+                print(f"❌ 길드 처리 중 오류 ({guild_id}): {guild_error}")
+                
+        print(f"✅ Keep-alive 작업 완료 - {datetime.now().strftime('%H:%M:%S')}")
+        
     except Exception as e:
-        print(f"Keep-alive 작업 중 오류: {e}")
+        print(f"❌ Keep-alive 작업 중 심각한 오류: {e}")
+        import traceback
+        traceback.print_exc()
+
+# Keep-alive 작업 에러 처리 개선
+@keep_alive_task.error
+async def keep_alive_error(error):
+    print(f"❌ Keep-alive 작업 오류: {error}")
+    import traceback
+    traceback.print_exc()
+    
+    # 작업이 중지된 경우 재시작 시도
+    if not keep_alive_task.is_running():
+        try:
+            print("🔄 Keep-alive 작업 재시작 시도...")
+            await asyncio.sleep(10)  # 10초 대기 후 재시작
+            keep_alive_task.restart()
+            print("✅ Keep-alive 작업 재시작 성공")
+        except Exception as restart_error:
+            print(f"❌ Keep-alive 작업 재시작 실패: {restart_error}")
 
 # 봇이 준비되었을 때
 @bot.event
@@ -139,8 +177,11 @@ async def on_ready():
     
     # Keep-alive 작업 시작
     if not keep_alive_task.is_running():
-        keep_alive_task.start()
-        print("🚀 Keep-alive 시스템 시작됨 (3분 간격)")
+        try:
+            keep_alive_task.start()
+            print("🚀 Keep-alive 시스템 시작됨 (3분 간격)")
+        except Exception as e:
+            print(f"❌ Keep-alive 시스템 시작 실패: {e}")
 
 # 길드 참가 시 keep-alive 채널 설정
 @bot.event
@@ -440,34 +481,37 @@ class MealButtonView(discord.ui.View):
     async def korean_food(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.used = True  # 버튼 사용됨 표시
         
-        # 디생러 역할 찾기 또는 생성
+        # 디생러 역할 찾기 - 없으면 새로 만들지 않음
         guild = interaction.guild
         designer_role = discord.utils.get(guild.roles, name="디생러")
-        if not designer_role:
-            try:
-                designer_role = await guild.create_role(
-                    name="디생러",
-                    color=discord.Color.pink(),
-                    reason="한식 버튼 선택자를 위한 역할 생성"
-                )
-                print(f"디생러 역할 생성 완료")
-            except discord.Forbidden:
-                print("역할 생성 권한이 없습니다!")
         
-        # 디생러 역할 추가
         if designer_role:
+            # 디생러 역할 추가
             try:
                 await self.member.add_roles(designer_role, reason="한식 버튼 선택")
                 print(f"{self.member.name}님에게 디생러 역할 추가")
             except discord.Forbidden:
                 print(f"역할 추가 권한이 없습니다!")
+        else:
+            print(f"디생러 역할이 존재하지 않습니다. 새로 생성하지 않고 넘어갑니다.")
         
         welcome_text = "서버 적응에 탁월한 당신" if self.is_first_join else "서버에 다시 오신 당신"
         
-        response_message = f"{welcome_text}  #💬ㆍ공항 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
+        # 채널과 역할 찾기를 통한 실제 멘션 생성
+        guild = interaction.guild
+        airport_channel = discord.utils.get(guild.text_channels, name="💬ㆍ공항")
+        request_channel = discord.utils.get(guild.text_channels, name="📋ㆍ요청사항")
+        office_worker_role = discord.utils.get(guild.roles, name="직장인")
+        
+        # 채널 멘션 처리 (없으면 텍스트로 표시)
+        airport_mention = airport_channel.mention if airport_channel else "#💬ㆍ공항"
+        request_mention = request_channel.mention if request_channel else "#📋ㆍ요청사항"
+        office_worker_mention = office_worker_role.mention if office_worker_role else "@직장인"
+        
+        response_message = f"{welcome_text} {airport_mention} 채널에 넣어드렸어요. 이곳은 친목 분위기가 형성된 장소지만 친화력 좋은 당신은 잘 녹아들거라 생각합니다.\n\n"
         response_message += "채팅도 잘 치고 사람들과 친해진다면 `마일리지`도 쌓을 수 있어요!!\n"
         response_message += "마일리지는 추후 상품으로 교환 가능합니다.\n\n"
-        response_message += "**아직 서버 적응이 더 필요해서** #💬ㆍ공항 채널을 안보이게 하고 싶으시면 #요청사항 에서 티켓을 뽑은 뒤 @직장인 을 멘션하시고 #공항 채널을 안보이게 해달라고 해주세요."
+        response_message += f"**아직 서버 적응이 더 필요해서** {airport_mention} 채널을 안보이게 하고 싶으시면 {request_mention} 에서 티켓을 뽑은 뒤 {office_worker_mention} 을 멘션하시고 #공항 채널을 안보이게 해달라고 해주세요."
         
         await interaction.response.send_message(response_message)
         
@@ -492,8 +536,8 @@ class MealButtonView(discord.ui.View):
         guild = interaction.guild
         
         # 성별 역할 확인 및 닉네임 변경
-        male_role = discord.utils.get(guild.roles, name="남자")
-        female_role = discord.utils.get(guild.roles, name="여자")
+        male_role = discord.utils.get(guild.roles, name="신사")
+        female_role = discord.utils.get(guild.roles, name="숙녀")
         
         current_nick = self.member.display_name
         new_nick = current_nick
@@ -505,12 +549,12 @@ class MealButtonView(discord.ui.View):
         if not (current_nick.startswith("(애플)") or current_nick.startswith("(피치)")):
             if male_role and male_role in self.member.roles:
                 new_nick = f"(애플) {current_nick}"
-                print(f"남자 역할 감지 - 새 닉네임: {new_nick}")
+                print(f"신사 역할 감지 - 새 닉네임: {new_nick}")
             elif female_role and female_role in self.member.roles:
                 new_nick = f"(피치) {current_nick}"
-                print(f"여자 역할 감지 - 새 닉네임: {new_nick}")
+                print(f"숙녀 역할 감지 - 새 닉네임: {new_nick}")
             else:
-                print(f"성별 역할을 찾을 수 없음. 남자 역할: {male_role}, 여자 역할: {female_role}")
+                print(f"성별 역할을 찾을 수 없음. 신사 역할: {male_role}, 숙녀 역할: {female_role}")
             
             # 닉네임 변경 시도
             if new_nick != current_nick:
@@ -1023,7 +1067,11 @@ async def keepalive_status(interaction: discord.Interaction):
     # 작업 상태 확인
     if keep_alive_task.is_running():
         status_message += "**작업 상태**: ✅ 실행 중 (3분 간격)\n"
-        status_message += f"**다음 실행**: {keep_alive_task.next_iteration.strftime('%H:%M:%S') if keep_alive_task.next_iteration else '알 수 없음'}\n\n"
+        next_run = keep_alive_task.next_iteration
+        if next_run:
+            status_message += f"**다음 실행**: {next_run.strftime('%H:%M:%S')}\n\n"
+        else:
+            status_message += "**다음 실행**: 계산 중...\n\n"
     else:
         status_message += "**작업 상태**: ❌ 중지됨\n\n"
     
@@ -1059,9 +1107,22 @@ async def stop_keepalive(interaction: discord.Interaction):
 @discord.app_commands.default_permissions(administrator=True)
 async def start_keepalive(interaction: discord.Interaction):
     if not keep_alive_task.is_running():
-        keep_alive_task.start()
-        await interaction.response.send_message("✅ Keep-alive 시스템이 시작되었습니다.", ephemeral=True)
-        print("Keep-alive 시스템 시작됨")
+        try:
+            keep_alive_task.start()
+            await interaction.response.send_message("✅ Keep-alive 시스템이 시작되었습니다.", ephemeral=True)
+            print("Keep-alive 시스템 시작됨")
+        except RuntimeError as e:
+            if "already running" in str(e).lower():
+                await interaction.response.send_message("❌ Keep-alive 시스템이 이미 실행 중입니다.", ephemeral=True)
+            else:
+                # 이미 실행 중인 경우 재시작 시도
+                try:
+                    keep_alive_task.restart()
+                    await interaction.response.send_message("✅ Keep-alive 시스템이 재시작되었습니다.", ephemeral=True)
+                    print("Keep-alive 시스템 재시작됨")
+                except Exception as restart_error:
+                    await interaction.response.send_message(f"❌ Keep-alive 시스템 시작 실패: {restart_error}", ephemeral=True)
+                    print(f"Keep-alive 시스템 시작 실패: {restart_error}")
     else:
         await interaction.response.send_message("❌ Keep-alive 시스템이 이미 실행 중입니다.", ephemeral=True)
 
@@ -1113,21 +1174,22 @@ async def on_command_error(ctx, error):
         print(f'❌ 명령어 에러: {error}')
         await ctx.send("❌ 명령어 처리 중 오류가 발생했습니다.")
 
-# Keep-alive 작업 에러 처리
-@keep_alive_task.error
-async def keep_alive_error(error):
-    print(f"❌ Keep-alive 작업 오류: {error}")
-    import traceback
-    traceback.print_exc()
+# 봇 연결 끊김 처리
+@bot.event
+async def on_disconnect():
+    print("⚠️ 봇 연결이 끊어졌습니다.")
+
+@bot.event
+async def on_resumed():
+    print("✅ 봇 연결이 복구되었습니다.")
     
-    # 5분 후 재시작 시도
-    await asyncio.sleep(300)
+    # Keep-alive 작업이 중지되었다면 재시작
     if not keep_alive_task.is_running():
         try:
-            keep_alive_task.restart()
-            print("🔄 Keep-alive 작업 재시작 성공")
+            keep_alive_task.start()
+            print("🔄 Keep-alive 시스템 자동 재시작")
         except Exception as e:
-            print(f"❌ Keep-alive 작업 재시작 실패: {e}")
+            print(f"❌ Keep-alive 시스템 자동 재시작 실패: {e}")
 
 # 봇 및 Flask 서버 실행
 if __name__ == "__main__":
@@ -1152,7 +1214,7 @@ if __name__ == "__main__":
     
     # 디스코드 봇 실행
     try:
-        bot.run(TOKEN, log_handler=None)  # 기본 로깅 비활성화
+        bot.run(TOKEN, log_handler=None, reconnect=True)  # 기본 로깅 비활성화, 자동 재연결 활성화
     except discord.LoginFailure:
         print("❌ 잘못된 봇 토큰입니다! 토큰을 다시 확인해주세요.")
     except discord.HTTPException as e:
